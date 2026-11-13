@@ -6,4 +6,4 @@
  *  Contains interface for radio module.
  */
 
- 
+#include "SX1278_hw.h"
