@@ -40,16 +40,22 @@ add_subdirectory(cmake/stm32cubemx)
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
+    
 )
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    "Core/App/src/radio.c"
+    "Drivers/SX1278/SX1278/driver/SX1278.c"
+    "Drivers/SX1278/SX1278/driver/SX1278_hw.c"
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    "Core/App/Inc"
+    "Drivers/SX1278/SX1278/driver"
 )
 
 # Add project symbols (macros)

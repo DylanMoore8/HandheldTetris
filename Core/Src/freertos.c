@@ -25,11 +25,13 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "radio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 typedef StaticTask_t osStaticThreadDef_t;
+typedef StaticQueue_t osStaticMessageQDef_t;
+typedef StaticSemaphore_t osStaticMutexDef_t;
 /* USER CODE BEGIN PTD */
 
 /* USER CODE END PTD */
@@ -60,6 +62,60 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = sizeof(defaultTaskBuffer),
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for radioReceiver */
+osThreadId_t radioReceiverHandle;
+uint32_t radioReceiverBuffer[ 128 ];
+osStaticThreadDef_t radioReceiverControlBlock;
+const osThreadAttr_t radioReceiver_attributes = {
+  .name = "radioReceiver",
+  .cb_mem = &radioReceiverControlBlock,
+  .cb_size = sizeof(radioReceiverControlBlock),
+  .stack_mem = &radioReceiverBuffer[0],
+  .stack_size = sizeof(radioReceiverBuffer),
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for radioTransmitte */
+osThreadId_t radioTransmitteHandle;
+uint32_t radioTransmitteBuffer[ 128 ];
+osStaticThreadDef_t radioTransmitteControlBlock;
+const osThreadAttr_t radioTransmitte_attributes = {
+  .name = "radioTransmitte",
+  .cb_mem = &radioTransmitteControlBlock,
+  .cb_size = sizeof(radioTransmitteControlBlock),
+  .stack_mem = &radioTransmitteBuffer[0],
+  .stack_size = sizeof(radioTransmitteBuffer),
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for radioReceived */
+osMessageQueueId_t radioReceivedHandle;
+uint8_t radioReceivedBuffer[ 16 * sizeof( uint16_t ) ];
+osStaticMessageQDef_t radioReceivedControlBlock;
+const osMessageQueueAttr_t radioReceived_attributes = {
+  .name = "radioReceived",
+  .cb_mem = &radioReceivedControlBlock,
+  .cb_size = sizeof(radioReceivedControlBlock),
+  .mq_mem = &radioReceivedBuffer,
+  .mq_size = sizeof(radioReceivedBuffer)
+};
+/* Definitions for radioTransmit */
+osMessageQueueId_t radioTransmitHandle;
+uint8_t radioTransmitBuffer[ 16 * sizeof( uint16_t ) ];
+osStaticMessageQDef_t radioTransmitControlBlock;
+const osMessageQueueAttr_t radioTransmit_attributes = {
+  .name = "radioTransmit",
+  .cb_mem = &radioTransmitControlBlock,
+  .cb_size = sizeof(radioTransmitControlBlock),
+  .mq_mem = &radioTransmitBuffer,
+  .mq_size = sizeof(radioTransmitBuffer)
+};
+/* Definitions for radioMutex */
+osMutexId_t radioMutexHandle;
+osStaticMutexDef_t radioMutexControlBlock;
+const osMutexAttr_t radioMutex_attributes = {
+  .name = "radioMutex",
+  .cb_mem = &radioMutexControlBlock,
+  .cb_size = sizeof(radioMutexControlBlock),
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -67,6 +123,8 @@ const osThreadAttr_t defaultTask_attributes = {
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
+void StartTask02(void *argument);
+void StartTask03(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -79,6 +137,9 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
+  /* Create the mutex(es) */
+  /* creation of radioMutex */
+  radioMutexHandle = osMutexNew(&radioMutex_attributes);
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -92,6 +153,13 @@ void MX_FREERTOS_Init(void) {
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
+  /* Create the queue(s) */
+  /* creation of radioReceived */
+  radioReceivedHandle = osMessageQueueNew (16, sizeof(uint16_t), &radioReceived_attributes);
+
+  /* creation of radioTransmit */
+  radioTransmitHandle = osMessageQueueNew (16, sizeof(uint16_t), &radioTransmit_attributes);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
@@ -99,6 +167,12 @@ void MX_FREERTOS_Init(void) {
   /* Create the thread(s) */
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+
+  /* creation of radioReceiver */
+  radioReceiverHandle = osThreadNew(StartTask02, NULL, &radioReceiver_attributes);
+
+  /* creation of radioTransmitte */
+  radioTransmitteHandle = osThreadNew(StartTask03, NULL, &radioTransmitte_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -126,6 +200,42 @@ void StartDefaultTask(void *argument)
     osDelay(1);
   }
   /* USER CODE END StartDefaultTask */
+}
+
+/* USER CODE BEGIN Header_StartTask02 */
+/**
+* @brief Function implementing the radioReceiver thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTask02 */
+void StartTask02(void *argument)
+{
+  /* USER CODE BEGIN StartTask02 */
+  /* Infinite loop */
+  for(;;)
+  {
+    radioReceiverTaskRunner();
+  }
+  /* USER CODE END StartTask02 */
+}
+
+/* USER CODE BEGIN Header_StartTask03 */
+/**
+* @brief Function implementing the radioTransmitte thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTask03 */
+void StartTask03(void *argument)
+{
+  /* USER CODE BEGIN StartTask03 */
+  /* Infinite loop */
+  for(;;)
+  {
+    radioTransmitterTaskRunner();
+  }
+  /* USER CODE END StartTask03 */
 }
 
 /* Private application code --------------------------------------------------*/
