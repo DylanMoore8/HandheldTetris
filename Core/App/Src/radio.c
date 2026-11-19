@@ -36,7 +36,6 @@ static sessionInfo_t session = {0};
 static unsigned long receivedPacketCount = 0;
 static unsigned long sentPacketCount = 0;
 
-#define MAX_OPPONENTS 8
 #define SESSION_TIMEOUT 3000 // after 3 seconds of no pings, the session times out
 
 #define RADIO_MUTEX_TIMOUT_MS 1000
@@ -44,12 +43,7 @@ static unsigned long sentPacketCount = 0;
 #define RADIO_TX_TIMEOUT_MS 2000 // max wait for TxDone (0 would wait forever)
 #define RADIO_RX_TIMEOUT_MS 2000 // max wait for the chip to enter RX
 #define RADIO_RX_POLL_MS    5    // receiver task poll period
-typedef struct 
-{
-    uint8_t id;
-    radioBeaconMessageContents_t info;
-    uint32_t lastPing;
-} availableOpponent;
+
 availableOpponent availableOpponents[MAX_OPPONENTS] = {0};
 
 radioError_t radioInit( radiohw_t * hw )
@@ -173,6 +167,15 @@ static void handleBeacon( const radioMessage_t * msg )
     {
         /* we enter the session with them */
         session.state = IN_SESSION;
+    }
+}
+
+void radioGetAvailableOpponents( availableOpponent * ops, int len )
+{
+    if ( ops == NULL ) return;
+    if ( MAX_OPPONENTS == len )
+    {
+        memcpy(ops, availableOpponents, sizeof(availableOpponents));
     }
 }
 

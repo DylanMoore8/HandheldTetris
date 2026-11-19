@@ -44,6 +44,14 @@ typedef struct __attribute__((packed))
 } radioBeaconMessageContents_t;
 #define BEACON_PKT_LEN sizeof( radioBeaconMessageContents_t )
 
+#define MAX_OPPONENTS 8
+typedef struct 
+{
+    uint8_t id;
+    radioBeaconMessageContents_t info;
+    uint32_t lastPing;
+} availableOpponent;
+
 typedef struct __attribute__((packed))
 {
     uint8_t  gameState;
@@ -85,6 +93,14 @@ radioError_t radioInit( radiohw_t * hw );
  * @brief Broadcast beacon message to look for lobby
  */
 void radioBroadcast( char * displayName );
+
+/**
+ * @brief get the available opponents
+ * 
+ * @param[out] ops array of size MAX_OPPONENTS
+ * @param[in] len length of ops
+ */
+void radioGetAvailableOpponents( availableOpponent * ops, int len );
 
 /**
  * @brief Request to play with an opponent

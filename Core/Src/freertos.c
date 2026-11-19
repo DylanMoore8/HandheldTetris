@@ -26,6 +26,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "radio.h"
+#include "usart.h"
+#include "stdio.h"
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,7 +55,7 @@ typedef StaticSemaphore_t osStaticMutexDef_t;
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
-uint32_t defaultTaskBuffer[ 128 ];
+uint32_t defaultTaskBuffer[ 256 ];
 osStaticThreadDef_t defaultTaskControlBlock;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
@@ -64,7 +67,7 @@ const osThreadAttr_t defaultTask_attributes = {
 };
 /* Definitions for radioReceiver */
 osThreadId_t radioReceiverHandle;
-uint32_t radioReceiverBuffer[ 128 ];
+uint32_t radioReceiverBuffer[ 256 ];
 osStaticThreadDef_t radioReceiverControlBlock;
 const osThreadAttr_t radioReceiver_attributes = {
   .name = "radioReceiver",
@@ -76,7 +79,7 @@ const osThreadAttr_t radioReceiver_attributes = {
 };
 /* Definitions for radioTransmitte */
 osThreadId_t radioTransmitteHandle;
-uint32_t radioTransmitteBuffer[ 128 ];
+uint32_t radioTransmitteBuffer[ 256 ];
 osStaticThreadDef_t radioTransmitteControlBlock;
 const osThreadAttr_t radioTransmitte_attributes = {
   .name = "radioTransmitte",
@@ -88,7 +91,7 @@ const osThreadAttr_t radioTransmitte_attributes = {
 };
 /* Definitions for radioReceived */
 osMessageQueueId_t radioReceivedHandle;
-uint8_t radioReceivedBuffer[ 16 * sizeof( uint16_t ) ];
+uint8_t radioReceivedBuffer[ 16 * 9 ];
 osStaticMessageQDef_t radioReceivedControlBlock;
 const osMessageQueueAttr_t radioReceived_attributes = {
   .name = "radioReceived",
@@ -99,7 +102,7 @@ const osMessageQueueAttr_t radioReceived_attributes = {
 };
 /* Definitions for radioTransmit */
 osMessageQueueId_t radioTransmitHandle;
-uint8_t radioTransmitBuffer[ 16 * sizeof( uint16_t ) ];
+uint8_t radioTransmitBuffer[ 16 * 9 ];
 osStaticMessageQDef_t radioTransmitControlBlock;
 const osMessageQueueAttr_t radioTransmit_attributes = {
   .name = "radioTransmit",
@@ -155,10 +158,10 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the queue(s) */
   /* creation of radioReceived */
-  radioReceivedHandle = osMessageQueueNew (16, sizeof(uint16_t), &radioReceived_attributes);
+  radioReceivedHandle = osMessageQueueNew (16, 9, &radioReceived_attributes);
 
   /* creation of radioTransmit */
-  radioTransmitHandle = osMessageQueueNew (16, sizeof(uint16_t), &radioTransmit_attributes);
+  radioTransmitHandle = osMessageQueueNew (16, 9, &radioTransmit_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -194,10 +197,44 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
+  /* initialize radio module */
+  radiohw_t hw = {
+    .radioMutex = radioMutexHandle,
+    .rxQueue    = radioReceivedHandle,
+    .txQueue    = radioTransmitHandle,
+    .spi        = &hspi2
+  };
+  radioInit( &hw );
+
+  char str1[] = "Radio initialized\r\n";
+  int len1    = strlen(str1); 
+  HAL_UART_Transmit( &huart2, (uint8_t*)str1, len1, HAL_MAX_DELAY );
+
+  char name[DISPLAY_NAME_LEN] = "JOE";
+
   /* Infinite loop */
+  char str2[] = "Beacon sent\r\n";
+  char strbuf[32];
+  availableOpponent ops[MAX_OPPONENTS] = {0};
   for(;;)
   {
-    osDelay(1);
+    #define TX
+    radioGetAvailableOpponents( ops, MAX_OPPONENTS );
+    #ifdef TX
+    radioBroadcast( name );
+    HAL_UART_Transmit( &huart2, (uint8_t*)str2, strlen(str2), HAL_MAX_DELAY );
+    #else
+    for (int i = 0; i < MAX_OPPONENTS; i++ )
+    {
+      availableOpponent op = ops[i];
+      if ( op.id != 0 )
+      {
+        sprintf( strbuf, "Opponent %.*s discovered\r\n",DISPLAY_NAME_LEN, op.info.displayName );
+        HAL_UART_Transmit( &huart2, (uint8_t*)strbuf, strlen(strbuf), HAL_MAX_DELAY );
+      }
+    }
+    #endif
+    osDelay(1000);
   }
   /* USER CODE END StartDefaultTask */
 }
