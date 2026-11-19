@@ -26,7 +26,7 @@ typedef struct
     uint8_t opponentId; 
 } sessionInfo_t;
 
-__weak uint8_t getId( void ) {return 1;}
+__weak uint8_t getId( void ) {return BOARD_ID;}
 
 static radio_t radio = {0};
 static SX1278_hw_t moduleHw = {0};

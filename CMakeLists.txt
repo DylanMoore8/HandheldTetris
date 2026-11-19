@@ -58,9 +58,28 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     "Drivers/SX1278/SX1278/driver"
 )
 
+# load defs from config file
+file(READ "${CMAKE_SOURCE_DIR}/config.json" JSON_CONTENT)
+# get values
+string(JSON id GET "${JSON_CONTENT}" "id")
+string(JSON useName GET "${JSON_CONTENT}" "useName")
+
+if (useName)
+    set(useName true)
+    string(JSON displayName GET "${JSON_CONTENT}" "name")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    # Add user defined symbols
+    DISPLAY_NAME="${displayName}"
+    )
+else()
+    set(useName false)
+endif()
+
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
+    BOARD_ID=${id}
+    USE_NAME=${useName}
 )
 
 # Remove wrong libob.a library dependency when using cpp files

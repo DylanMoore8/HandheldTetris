@@ -29,6 +29,7 @@
 #include "usart.h"
 #include "stdio.h"
 #include "string.h"
+#include "stdbool.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -218,12 +219,14 @@ void StartDefaultTask(void *argument)
   availableOpponent ops[MAX_OPPONENTS] = {0};
   for(;;)
   {
-    #define TX
     radioGetAvailableOpponents( ops, MAX_OPPONENTS );
-    #ifdef TX
+
+    #ifdef DISPLAY_NAME
+      memcpy(name, DISPLAY_NAME, DISPLAY_NAME_LEN);
+    #endif
+
     radioBroadcast( name );
     HAL_UART_Transmit( &huart2, (uint8_t*)str2, strlen(str2), HAL_MAX_DELAY );
-    #else
     for (int i = 0; i < MAX_OPPONENTS; i++ )
     {
       availableOpponent op = ops[i];
@@ -233,7 +236,6 @@ void StartDefaultTask(void *argument)
         HAL_UART_Transmit( &huart2, (uint8_t*)strbuf, strlen(strbuf), HAL_MAX_DELAY );
       }
     }
-    #endif
     osDelay(1000);
   }
   /* USER CODE END StartDefaultTask */
