@@ -156,7 +156,7 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
-  // initGame();
+  initGame();
   /* Infinite loop */
   for(;;)
   {
@@ -199,12 +199,12 @@ void startInputProcessor(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    inputEvent_t event;
-    if ( osMessageQueueGet( inputQueueHandle, &event, NULL, osWaitForever ) == osOK )
-    {
-      sprintf( buf, "Key: %d, %s\r\n", event.type, event.state == INPUT_PRESSED ? "pressed": "released" );
-      HAL_UART_Transmit( &huart2, (uint8_t*)buf, strlen(buf), 1000 );
-    }
+    // inputEvent_t event;
+    // if ( osMessageQueueGet( inputQueueHandle, &event, NULL, osWaitForever ) == osOK )
+    // {
+    //   sprintf( buf, "Key: %d, %s\r\n", event.type, event.state == INPUT_PRESSED ? "pressed": "released" );
+    //   HAL_UART_Transmit( &huart2, (uint8_t*)buf, strlen(buf), 1000 );
+    // }
     osDelay(1);
   }
   /* USER CODE END startInputProcessor */

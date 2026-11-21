@@ -19,7 +19,7 @@ import serial
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SERIAL_PORT = "COM3"   # e.g. "COM3" on Windows
+SERIAL_PORT = "/dev/ttyACM0"   # e.g. "COM3" on Windows
 BAUD_RATE = 115200
 SPRITE_MAP_PATH = "sprites.png"
 

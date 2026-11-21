@@ -6,6 +6,9 @@
 #include "screen.h"
 #include "stdbool.h"
 #include "rng.h"
+#include "input.h"
+
+extern osMessageQueueId_t inputQueueHandle;
 
 #define GAME_TICK ( 100 )
 #define TICKS_PER_SEC ( 1000 / GAME_TICK )
@@ -337,7 +340,21 @@ void gameTask(void *argument)
 
     for(;;)
     {
-        
+        inputEvent_t event;
+        while( osMessageQueueGet( inputQueueHandle, &event, NULL, 0 ) == osOK )
+        {
+            if( event.state != INPUT_PRESSED ) continue;
+            switch( event.type )
+            {
+                case INPUT_UP:    pieceMove( &activePiece, PIECE_UP );    break;
+                case INPUT_DOWN:  pieceMove( &activePiece, PIECE_DOWN );  break;
+                case INPUT_LEFT:  pieceMove( &activePiece, PIECE_LEFT );  break;
+                case INPUT_RIGHT: pieceMove( &activePiece, PIECE_RIGHT ); break;
+                case INPUT_A:     pieceMove( &activePiece, PIECE_CW );    break;
+                case INPUT_B:     pieceMove( &activePiece, PIECE_CCW );   break;
+            }
+        }
+
         if( pieceFallTickCount == PIECE_FALL_TICKS )
         {
             bool hit_block = !pieceMove(&activePiece, PIECE_DOWN);
