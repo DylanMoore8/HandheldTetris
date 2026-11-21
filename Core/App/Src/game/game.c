@@ -13,6 +13,7 @@
 #define GAME_TICK ( 50 )
 #define TICKS_PER_SEC ( 1000 / GAME_TICK )
 #define PIECE_FALL_TICKS ( 500 / GAME_TICK )
+#define PIECE_MOVE_TICKS ( 100 / GAME_TICK )
 #define CLEAR_ANIMATION_TICKS ( 50 / GAME_TICK )
 
 const static SpriteMap background = {
@@ -304,7 +305,7 @@ static bool pieceOverlapping( PieceActive *piece )
             break;
         }
         // If block is clipping block on board:
-        else if( block_y > 0 && board[block_y][block_x] != BLOCK_TYPE_EMPTY )
+        else if( block_y >= 0 && board[block_y][block_x] != BLOCK_TYPE_EMPTY )
         {
             overlapping = true;
             break;
@@ -326,7 +327,7 @@ static void copyPieceToBoard( PieceActive *piece )
         int8_t block_x = abs_position.blocks[i].x;
         int8_t block_y = abs_position.blocks[i].y;
 
-        if( block_y > 0 )
+        if( block_y >= 0 )
         {
             board[block_y][block_x] = blockType;
         }
@@ -575,6 +576,15 @@ const osThreadAttr_t gameTask_attributes = {
 extern osMessageQueueId_t inputQueue; // from input.c
 
 bool pieceLanded = false;
+bool holdPieceLock = false;
+
+#define INPUT_HOLD_NONE ( 255 )
+InputType inputHoldKey = INPUT_HOLD_NONE; // Nothing
+
+static uint32_t tickCount = 0;
+static uint32_t pieceFallTickCount = 0;
+static uint32_t pieceMoveTickCount = 0;
+static uint32_t clearAnimationTickCount = 0;
 
 static void handleInput()
 {
@@ -584,28 +594,53 @@ static void handleInput()
         if( inputEvent.state == INPUT_PRESSED )
         {
             switch(inputEvent.type) {
-                case(INPUT_DOWN): { 
-                    bool hit_block = !pieceMove(&activePiece, PIECE_DOWN);
-                    if( hit_block )
-                    {
-                        pieceLanded = true; // trigger land flag
-                    }
-                } break;
-                case(INPUT_LEFT): {
-                    pieceMove(&activePiece, PIECE_LEFT);
-                } break;
+                case(INPUT_DOWN):
+                case(INPUT_LEFT):
                 case(INPUT_RIGHT): {
-                    pieceMove(&activePiece, PIECE_RIGHT);
+                    inputHoldKey = inputEvent.type; // Key to move repeatedly on hold
+                    pieceMoveTickCount = PIECE_MOVE_TICKS; // Sets the piece to move immediately on input
                 } break;
                 case(INPUT_A): {
                     pieceMove(&activePiece, PIECE_CW);
                 } break;
                 case(INPUT_B): {
-                    holdPiece();
+                    if( holdPieceLock == false )
+                    {
+                        holdPiece();
+                        holdPieceLock = true; // Lock the hold functionality;
+                    }
                 } break;
                 default: {} break;
             }
         }
+        else // Key was released:
+        {
+            if( inputEvent.type == inputHoldKey )
+            {
+                inputHoldKey = INPUT_HOLD_NONE;
+            }
+        }
+
+    }
+}
+
+static void handleMovement()
+{
+    switch( inputHoldKey ) {
+        case(INPUT_DOWN): { 
+            bool hit_block = !pieceMove(&activePiece, PIECE_DOWN);
+            if( hit_block )
+            {
+                pieceLanded = true; // trigger land flag
+            }
+        } break;
+        case(INPUT_LEFT): {
+            pieceMove(&activePiece, PIECE_LEFT);
+        } break;
+        case(INPUT_RIGHT): {
+            pieceMove(&activePiece, PIECE_RIGHT);
+        } break;
+        default: {} break;
     }
 }
 
@@ -628,10 +663,12 @@ void gameTask(void *argument)
     placeNewPiece(&nextPiece);
     placeNewPiece(&activePiece);
 
-    uint32_t tickCount = 0;
-    uint32_t pieceFallTickCount = 0;
-    uint32_t clearAnimationTickCount = 0;
-    uint8_t lineClearBlockAnimation;
+    tickCount = 0;
+    pieceFallTickCount = 0;
+    pieceMoveTickCount = 0;
+    clearAnimationTickCount = 0;
+
+    uint8_t lineClearBlockAnimation = 0;
 
     uint32_t osTick = osKernelGetTickCount();
 
@@ -658,11 +695,17 @@ void gameTask(void *argument)
                 if( !pieceLanded ) // Stop input if a piece lands
                 {
                     handleInput();
+                    if( pieceMoveTickCount == PIECE_MOVE_TICKS )
+                    {
+                        handleMovement();
+                        pieceMoveTickCount = 0;
+                    }
+                    pieceMoveTickCount++;
                 }
-                else
+                else // If a piece lands
                 {
                     landPieceAndCheckLines();
-                    if( fullLinesAvailable ) // If a full line is available.
+                    if( fullLinesAvailable ) // If a full line is available:
                     {
                         clearAnimationTickCount = 0;
                         lineClearBlockAnimation = 0;
@@ -672,7 +715,8 @@ void gameTask(void *argument)
                     {
                         gameState = GAME_GAME_OVER;
                     }
-                    pieceLanded = false;
+                    pieceLanded = false; // Reset the flag
+                    holdPieceLock = false; // Release the hold functionality
                 }
 
                 pieceFallTickCount++;
@@ -697,6 +741,7 @@ void gameTask(void *argument)
                         fallFullLines();
 
                         pieceFallTickCount = 0;
+                        pieceMoveTickCount = 0;
                         gameState = GAME_NORMAL;
                     }
                 }
@@ -723,7 +768,7 @@ void gameTask(void *argument)
 
         tickCount++;
     }
-    /* USER CODE END StartDefaultTask */
+
 }
 
 void gameInit()
