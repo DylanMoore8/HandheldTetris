@@ -49,6 +49,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ./Core/App/Src/game/rng.c
     ./Core/App/Src/screen.c
     ./Core/App/Src/radio.c
+    Core/App/Src/input.c
+    # HAL TIM driver: needed for the TIM2 HAL timebase (CubeMX omits it)
+    /home/dylan/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
+    /home/dylan/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
 )
 
 # Add include paths
