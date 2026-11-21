@@ -49,6 +49,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ./Core/App/Src/game/rng.c
     ./Core/App/Src/screen.c
     ./Core/App/Src/radio.c
+    ./Core/App/Src/input.c
 )
 
 # Add include paths

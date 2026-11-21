@@ -20,10 +20,15 @@ import serial
 # Configuration
 # ----------------------------------------------------------------------------
 SERIAL_PORT = "COM3"   # e.g. "COM3" on Windows
-BAUD_RATE = 115200
+BAUD_RATE = 576000
 SPRITE_MAP_PATH = "sprites.png"
 
-SCALE = 4                      # integer window scale factor
+SCALE = 6                      # integer window scale factor
+
+# Bytes sent after the key character on press / release.
+# (Sent as raw bytes 0x01 and 0x00, i.e. C-style '\1' and '\0'.)
+KEY_PRESS_BYTE = b"\x01"
+KEY_RELEASE_BYTE = b"\x00"
 
 # ----------------------------------------------------------------------------
 # Fixed screen / sprite geometry
@@ -86,6 +91,14 @@ def build_frame(line_bytes, sprite_map, sprite_rows):
     return frame
 
 
+def key_to_char(key):
+    """Return the lowercase alphanumeric character for a pygame key code,
+    or None if it isn't a-z / 0-9 (shift/caps lock are ignored)."""
+    if pygame.K_a <= key <= pygame.K_z or pygame.K_0 <= key <= pygame.K_9:
+        return chr(key)
+    return None
+
+
 def parse_line(line, overflowed):
     """Convert one received line of ASCII hex into bytes.
 
@@ -136,6 +149,12 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type in (pygame.KEYDOWN, pygame.KEYUP):
+                char = key_to_char(event.key)
+                if char is not None:
+                    suffix = (KEY_PRESS_BYTE if event.type == pygame.KEYDOWN
+                              else KEY_RELEASE_BYTE)
+                    ser.write(char.encode("ascii") + suffix)
 
         data = ser.read(ser.in_waiting or 1)
         for byte in data:

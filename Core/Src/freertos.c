@@ -22,10 +22,11 @@
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
-#include "game.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "game.h"
+#include "input.h"
 
 /* USER CODE END Includes */
 
@@ -121,7 +122,8 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
-  initGame();
+  gameInit();
+  inputInit();
   /* Infinite loop */
   for(;;)
   {
