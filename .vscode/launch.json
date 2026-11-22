@@ -27,8 +27,8 @@
             "type": "pickString",
             "description": "Select which ST-Link / board to debug",
             "options": [
-                { "label": "COM3", "value": "066BFF514988525067213214" },
-                { "label": "COM7", "value": "066CFF514988525067221235" }
+                { "label": "P1", "value": "066BFF514988525067213214" },
+                { "label": "P2", "value": "066CFF514988525067221235" }
             ],
             "default": "066BFF514988525067213214"
         }
