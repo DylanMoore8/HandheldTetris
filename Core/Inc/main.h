@@ -57,12 +57,12 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define B1_Pin GPIO_PIN_13
-#define B1_GPIO_Port GPIOC
-#define RADIO_MISO_Pin GPIO_PIN_2
-#define RADIO_MISO_GPIO_Port GPIOC
-#define RADIO_MOSI_Pin GPIO_PIN_3
-#define RADIO_MOSI_GPIO_Port GPIOC
+#define INPUT_A_Pin GPIO_PIN_0
+#define INPUT_A_GPIO_Port GPIOC
+#define INPUT_A_EXTI_IRQn EXTI0_IRQn
+#define INPUT_B_Pin GPIO_PIN_1
+#define INPUT_B_GPIO_Port GPIOC
+#define INPUT_B_EXTI_IRQn EXTI1_IRQn
 #define USART_TX_Pin GPIO_PIN_2
 #define USART_TX_GPIO_Port GPIOA
 #define USART_RX_Pin GPIO_PIN_3
@@ -73,6 +73,19 @@ void Error_Handler(void);
 #define RADIO_SCK_GPIO_Port GPIOB
 #define RADIO_NSS_Pin GPIO_PIN_12
 #define RADIO_NSS_GPIO_Port GPIOB
+#define INPUT_LEFT_Pin GPIO_PIN_13
+#define INPUT_LEFT_GPIO_Port GPIOB
+#define INPUT_LEFT_EXTI_IRQn EXTI15_10_IRQn
+#define RADIO_MISO_Pin GPIO_PIN_14
+#define RADIO_MISO_GPIO_Port GPIOB
+#define RADIO_MOSI_Pin GPIO_PIN_15
+#define RADIO_MOSI_GPIO_Port GPIOB
+#define INPUT_DOWN_Pin GPIO_PIN_9
+#define INPUT_DOWN_GPIO_Port GPIOA
+#define INPUT_DOWN_EXTI_IRQn EXTI9_5_IRQn
+#define INPUT_UP_Pin GPIO_PIN_10
+#define INPUT_UP_GPIO_Port GPIOA
+#define INPUT_UP_EXTI_IRQn EXTI15_10_IRQn
 #define RADIO_DIO0_Pin GPIO_PIN_11
 #define RADIO_DIO0_GPIO_Port GPIOA
 #define RADIO_RST_Pin GPIO_PIN_12
@@ -83,6 +96,9 @@ void Error_Handler(void);
 #define TCK_GPIO_Port GPIOA
 #define SWO_Pin GPIO_PIN_3
 #define SWO_GPIO_Port GPIOB
+#define INPUT_RIGHT_Pin GPIO_PIN_5
+#define INPUT_RIGHT_GPIO_Port GPIOB
+#define INPUT_RIGHT_EXTI_IRQn EXTI9_5_IRQn
 
 /* USER CODE BEGIN Private defines */
 
