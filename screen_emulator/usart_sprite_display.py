@@ -19,9 +19,15 @@ import serial
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SERIAL_PORT = "COM3"   # e.g. "COM3" on Windows
+SERIAL_PORT = "COM4"   # e.g. "COM3" on Windows
 BAUD_RATE = 576000
 SPRITE_MAP_PATH = "sprites.png"
+
+# Incoming data format:
+#   "hex" - ASCII hex characters (e.g. "0011ABCD"), messages end with '\n' (0x0A)
+#   "raw" - raw bytes, each byte is a sprite index, messages end with 0xFF
+#           (so sprite index 255 can't be used in this mode)
+INPUT_MODE = "raw"
 
 SCALE = 6                      # integer window scale factor
 
@@ -40,7 +46,15 @@ SCREEN_SPRITES_H = 32          # 32 * 4 = 128 px
 SCREEN_W = SCREEN_SPRITES_W * SPRITE_SIZE
 SCREEN_H = SCREEN_SPRITES_H * SPRITE_SIZE
 SCREEN_SPRITE_COUNT = SCREEN_SPRITES_W * SCREEN_SPRITES_H
-MAX_LINE_CHARS = SCREEN_SPRITE_COUNT * 2   # 2 hex characters per sprite
+
+if INPUT_MODE == "hex":
+    TERMINATOR = 0x0A                           # '\n'
+    MAX_MESSAGE_LEN = SCREEN_SPRITE_COUNT * 2   # 2 hex characters per sprite
+elif INPUT_MODE == "raw":
+    TERMINATOR = 0xFF
+    MAX_MESSAGE_LEN = SCREEN_SPRITE_COUNT       # 1 byte per sprite
+else:
+    raise ValueError(f"INPUT_MODE must be 'hex' or 'raw', got {INPUT_MODE!r}")
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -100,15 +114,19 @@ def key_to_char(key):
 
 
 def parse_line(line, overflowed):
-    """Convert one received line of ASCII hex into bytes.
+    """Convert one received message into a bytes object of sprite indexes.
 
-    Returns None (after printing a warning) if the line is malformed, e.g.
-    because the device restarted partway through a message.
+    In "hex" mode the message is ASCII hex; in "raw" mode it is already the
+    sprite indexes. Returns None (after printing a warning) if the message is
+    malformed, e.g. because the device restarted partway through it.
     """
-    if overflowed or len(line) > MAX_LINE_CHARS:
-        print(f"Warning: message too long (max {MAX_LINE_CHARS} hex "
-              f"characters); discarding.", file=sys.stderr)
+    if overflowed or len(line) > MAX_MESSAGE_LEN:
+        unit = "hex characters" if INPUT_MODE == "hex" else "bytes"
+        print(f"Warning: message too long (max {MAX_MESSAGE_LEN} {unit}); "
+              f"discarding.", file=sys.stderr)
         return None
+    if INPUT_MODE == "raw":
+        return line
     if len(line) % 2 != 0:
         print(f"Warning: odd number of hex characters ({len(line)}); "
               f"discarding.", file=sys.stderr)
@@ -141,7 +159,7 @@ def main():
 
     shown_frame = pygame.Surface((SCREEN_W, SCREEN_H))
     shown_frame.fill(BLACK)
-    rx = bytearray()    # raw ASCII received since the last '\n'
+    rx = bytearray()    # bytes received since the last terminator
     overflowed = False  # True once the current message exceeds the max length
 
     running = True
@@ -158,16 +176,16 @@ def main():
 
         data = ser.read(ser.in_waiting or 1)
         for byte in data:
-            if byte != 0x0A:  # not '\n'
+            if byte != TERMINATOR:
                 # Stop storing once too long (so a runaway message can't
-                # grow forever); just wait for the next '\n'.
-                if len(rx) > MAX_LINE_CHARS:
+                # grow forever); just wait for the next terminator.
+                if len(rx) > MAX_MESSAGE_LEN:
                     overflowed = True
                 else:
                     rx.append(byte)
                 continue
 
-            # '\n' received: validate, draw if good, and always reset.
+            # Terminator received: validate, draw if good, and always reset.
             sprite_indexes = parse_line(bytes(rx), overflowed)
             if sprite_indexes is not None:
                 shown_frame = build_frame(sprite_indexes, sprite_map,
