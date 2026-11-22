@@ -26,6 +26,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "radio.h"
+#include "game.h"
+#include "input.h"
 #include "usart.h"
 #include "stdio.h"
 #include "string.h"
@@ -120,6 +122,29 @@ const osMutexAttr_t radioMutex_attributes = {
   .cb_mem = &radioMutexControlBlock,
   .cb_size = sizeof(radioMutexControlBlock),
 };
+/* Definitions for inputProcessor */
+osThreadId_t inputProcessorHandle;
+uint32_t inputProcessorBuffer[ 128 ];
+osStaticThreadDef_t inputProcessorControlBlock;
+const osThreadAttr_t inputProcessor_attributes = {
+  .name = "inputProcessor",
+  .cb_mem = &inputProcessorControlBlock,
+  .cb_size = sizeof(inputProcessorControlBlock),
+  .stack_mem = &inputProcessorBuffer[0],
+  .stack_size = sizeof(inputProcessorBuffer),
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for inputQueue */
+osMessageQueueId_t inputQueueHandle;
+uint8_t myQueue01Buffer[ 16 * 8 ];
+osStaticMessageQDef_t myQueue01ControlBlock;
+const osMessageQueueAttr_t inputQueue_attributes = {
+  .name = "inputQueue",
+  .cb_mem = &myQueue01ControlBlock,
+  .cb_size = sizeof(myQueue01ControlBlock),
+  .mq_mem = &myQueue01Buffer,
+  .mq_size = sizeof(myQueue01Buffer)
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -129,6 +154,7 @@ const osMutexAttr_t radioMutex_attributes = {
 void StartDefaultTask(void *argument);
 void StartTask02(void *argument);
 void StartTask03(void *argument);
+void startInputProcessor(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -164,6 +190,9 @@ void MX_FREERTOS_Init(void) {
   /* creation of radioTransmit */
   radioTransmitHandle = osMessageQueueNew (16, 9, &radioTransmit_attributes);
 
+  /* creation of inputQueue */
+  inputQueueHandle = osMessageQueueNew (16, 8, &inputQueue_attributes);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
@@ -177,6 +206,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of radioTransmitte */
   radioTransmitteHandle = osThreadNew(StartTask03, NULL, &radioTransmitte_attributes);
+
+  /* creation of inputProcessor */
+  inputProcessorHandle = osThreadNew(startInputProcessor, NULL, &inputProcessor_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -207,35 +239,10 @@ void StartDefaultTask(void *argument)
   };
   radioInit( &hw );
 
-  char str1[] = "Radio initialized\r\n";
-  int len1    = strlen(str1); 
-  HAL_UART_Transmit( &huart2, (uint8_t*)str1, len1, HAL_MAX_DELAY );
-
-  char name[DISPLAY_NAME_LEN] = "JOE";
-
+  initGame();
   /* Infinite loop */
-  char str2[] = "Beacon sent\r\n";
-  char strbuf[32];
-  availableOpponent ops[MAX_OPPONENTS] = {0};
   for(;;)
   {
-    radioGetAvailableOpponents( ops, MAX_OPPONENTS );
-
-    #ifdef DISPLAY_NAME
-      memcpy(name, DISPLAY_NAME, DISPLAY_NAME_LEN);
-    #endif
-
-    radioBroadcast( name );
-    HAL_UART_Transmit( &huart2, (uint8_t*)str2, strlen(str2), HAL_MAX_DELAY );
-    for (int i = 0; i < MAX_OPPONENTS; i++ )
-    {
-      availableOpponent op = ops[i];
-      if ( op.id != 0 )
-      {
-        sprintf( strbuf, "Opponent %.*s discovered\r\n",DISPLAY_NAME_LEN, op.info.displayName );
-        HAL_UART_Transmit( &huart2, (uint8_t*)strbuf, strlen(strbuf), HAL_MAX_DELAY );
-      }
-    }
     osDelay(1000);
   }
   /* USER CODE END StartDefaultTask */
@@ -275,6 +282,51 @@ void StartTask03(void *argument)
     radioTransmitterTaskRunner();
   }
   /* USER CODE END StartTask03 */
+}
+
+/* USER CODE BEGIN Header_startInputProcessor */
+/**
+* @brief Function implementing the inputProcessor thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_startInputProcessor */
+void startInputProcessor(void *argument)
+{
+  /* USER CODE BEGIN startInputProcessor */
+  inputHw_t inputHw = {
+    .pins = {
+      .aPin     = INPUT_A_Pin,
+      .bPin     = INPUT_B_Pin,
+      .leftPin  = INPUT_LEFT_Pin,
+      .rightPin = INPUT_RIGHT_Pin,
+      .downPin  = INPUT_DOWN_Pin,
+      .upPin    = INPUT_UP_Pin
+    },
+    .ports      = {
+      .aPort     = INPUT_A_GPIO_Port,
+      .bPort     = INPUT_B_GPIO_Port,
+      .leftPort  = INPUT_LEFT_GPIO_Port,
+      .rightPort = INPUT_RIGHT_GPIO_Port,
+      .downPort  = INPUT_DOWN_GPIO_Port,
+      .upPort    = INPUT_UP_GPIO_Port
+    }
+  };
+  initInput( &inputHw );
+  extern UART_HandleTypeDef huart2;
+  char buf[32];
+  /* Infinite loop */
+  for(;;)
+  {
+    // inputEvent_t event;
+    // if ( osMessageQueueGet( inputQueueHandle, &event, NULL, osWaitForever ) == osOK )
+    // {
+    //   sprintf( buf, "Key: %d, %s\r\n", event.type, event.state == INPUT_PRESSED ? "pressed": "released" );
+    //   HAL_UART_Transmit( &huart2, (uint8_t*)buf, strlen(buf), 1000 );
+    // }
+    osDelay(1);
+  }
+  /* USER CODE END startInputProcessor */
 }
 
 /* Private application code --------------------------------------------------*/
