@@ -92,6 +92,18 @@ const osThreadAttr_t radioTransmitte_attributes = {
   .stack_size = sizeof(radioTransmitteBuffer),
   .priority = (osPriority_t) osPriorityLow,
 };
+/* Definitions for inputProcessor */
+osThreadId_t inputProcessorHandle;
+uint32_t inputProcessorBuffer[ 128 ];
+osStaticThreadDef_t inputProcessorControlBlock;
+const osThreadAttr_t inputProcessor_attributes = {
+  .name = "inputProcessor",
+  .cb_mem = &inputProcessorControlBlock,
+  .cb_size = sizeof(inputProcessorControlBlock),
+  .stack_mem = &inputProcessorBuffer[0],
+  .stack_size = sizeof(inputProcessorBuffer),
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* Definitions for radioReceived */
 osMessageQueueId_t radioReceivedHandle;
 uint8_t radioReceivedBuffer[ 16 * 9 ];
@@ -114,26 +126,6 @@ const osMessageQueueAttr_t radioTransmit_attributes = {
   .mq_mem = &radioTransmitBuffer,
   .mq_size = sizeof(radioTransmitBuffer)
 };
-/* Definitions for radioMutex */
-osMutexId_t radioMutexHandle;
-osStaticMutexDef_t radioMutexControlBlock;
-const osMutexAttr_t radioMutex_attributes = {
-  .name = "radioMutex",
-  .cb_mem = &radioMutexControlBlock,
-  .cb_size = sizeof(radioMutexControlBlock),
-};
-/* Definitions for inputProcessor */
-osThreadId_t inputProcessorHandle;
-uint32_t inputProcessorBuffer[ 128 ];
-osStaticThreadDef_t inputProcessorControlBlock;
-const osThreadAttr_t inputProcessor_attributes = {
-  .name = "inputProcessor",
-  .cb_mem = &inputProcessorControlBlock,
-  .cb_size = sizeof(inputProcessorControlBlock),
-  .stack_mem = &inputProcessorBuffer[0],
-  .stack_size = sizeof(inputProcessorBuffer),
-  .priority = (osPriority_t) osPriorityNormal,
-};
 /* Definitions for inputQueue */
 osMessageQueueId_t inputQueueHandle;
 uint8_t myQueue01Buffer[ 16 * 8 ];
@@ -144,6 +136,14 @@ const osMessageQueueAttr_t inputQueue_attributes = {
   .cb_size = sizeof(myQueue01ControlBlock),
   .mq_mem = &myQueue01Buffer,
   .mq_size = sizeof(myQueue01Buffer)
+};
+/* Definitions for radioMutex */
+osMutexId_t radioMutexHandle;
+osStaticMutexDef_t radioMutexControlBlock;
+const osMutexAttr_t radioMutex_attributes = {
+  .name = "radioMutex",
+  .cb_mem = &radioMutexControlBlock,
+  .cb_size = sizeof(radioMutexControlBlock),
 };
 
 /* Private function prototypes -----------------------------------------------*/
