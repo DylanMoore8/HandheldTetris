@@ -239,7 +239,7 @@ void StartDefaultTask(void *argument)
   };
   radioInit( &hw );
 
-  initGame();
+  gameInit();
   /* Infinite loop */
   for(;;)
   {

@@ -23,20 +23,8 @@ void screenDrawDebug(const SpriteMap map)
     // 00112233445566778899AABBCCDDEEFF\n
     // ...
 
-    #define LINE_LENGTH ( (SCREEN_SPRITE_WIDTH*2) + 2 )
-
-    char line[LINE_LENGTH];
-    
-    for(int y = 0; y < SCREEN_SPRITE_HEIGHT; y++)
-    {
-        for(int x = 0; x < SCREEN_SPRITE_WIDTH; x++)
-        {
-            sprintf(&line[x*2], "%02X", map[y][x]);
-        }
-
-        HAL_UART_Transmit(&huart2, (uint8_t *)line, (SCREEN_SPRITE_WIDTH*2), HAL_MAX_DELAY);
-    }
-    HAL_UART_Transmit(&huart2, (uint8_t *)"\n", 1, HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart2, (uint8_t *)map, (SCREEN_SPRITE_WIDTH * SCREEN_SPRITE_HEIGHT), HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart2, &(uint8_t){ 0xFF }, 1, HAL_MAX_DELAY);
 }
 
 void screenDrawBFDebug(const SpriteMap back, const SpriteMap front)
@@ -48,10 +36,6 @@ void screenDrawBFDebug(const SpriteMap back, const SpriteMap front)
     // 00112233445566778899AABBCCDDEEFF\n
     // 00112233445566778899AABBCCDDEEFF\n
     // ...
-
-    #define LINE_LENGTH ( (SCREEN_SPRITE_WIDTH*2) + 2 )
-
-    char line[LINE_LENGTH];
     
     for(int y = 0; y < SCREEN_SPRITE_HEIGHT; y++)
     {
@@ -63,10 +47,9 @@ void screenDrawBFDebug(const SpriteMap back, const SpriteMap front)
                 si = back[y][x];
                 
             }
-            sprintf(&line[x*2], "%02X", si);
+            //sprintf(&line[x*2], "%02X", si);
+            HAL_UART_Transmit(&huart2, (uint8_t *)&si, 1, HAL_MAX_DELAY);
         }
-
-        HAL_UART_Transmit(&huart2, (uint8_t *)line, (SCREEN_SPRITE_WIDTH*2), HAL_MAX_DELAY);
     }
-    HAL_UART_Transmit(&huart2, (uint8_t *)"\n", 1, HAL_MAX_DELAY);
+    HAL_UART_Transmit(&huart2, &(uint8_t){ 0xFF }, 1, HAL_MAX_DELAY);
 }
