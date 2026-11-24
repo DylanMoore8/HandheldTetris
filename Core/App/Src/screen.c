@@ -235,5 +235,5 @@ void screenTask(void)
 
 void screenInit(void)
 {
-    screenTaskHandle = osThreadNew(screenTask, NULL, &screenTask_attributes);
+    //screenTaskHandle = osThreadNew(screenTask, NULL, &screenTask_attributes);
 }
