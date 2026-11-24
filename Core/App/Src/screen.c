@@ -1,5 +1,9 @@
 #include "screen.h"
 #include "stm32f4xx.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "cmsis_os.h"
+#include "cmsis_os2.h"
 #include "ssd1306.h"
 #include <string.h>
 #include <stdio.h>
@@ -210,4 +214,26 @@ void screenDrawBFDebug(const SpriteMap back, const SpriteMap front)
         }
     }
     HAL_UART_Transmit(&huart2, &(uint8_t){ 0xFF }, 1, HAL_MAX_DELAY);
+}
+
+osThreadId_t screenTaskHandle;
+uint32_t screenTaskBuffer[ 512 ];
+StaticTask_t screenTaskControlBlock;
+const osThreadAttr_t screenTask_attributes = {
+  .name = "screenTask",
+  .cb_mem = &screenTaskControlBlock,
+  .cb_size = sizeof(screenTaskControlBlock),
+  .stack_mem = &screenTaskBuffer[0],
+  .stack_size = sizeof(screenTaskBuffer),
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+void screenTask(void)
+{
+    
+}
+
+void screenInit(void)
+{
+    screenTaskHandle = osThreadNew(screenTask, NULL, &screenTask_attributes);
 }
