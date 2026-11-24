@@ -684,19 +684,20 @@ void gameTask(void *argument)
     {
         screenReset(foreground);
 
+        availableOpponent ops[MAX_OPPONENTS] = {0};
+
+        // who is out there?
+        radioGetAvailableOpponents( ops, MAX_OPPONENTS );
+
+        // let others know we are here
+        radioBroadcast( DISPLAY_NAME, seed );
+
         switch( gameState )
         {
             case(GAME_INIT):
             {
                 // find a session 
-                availableOpponent ops[MAX_OPPONENTS] = {0};
                 availableOpponent selectedOpponent   = {0};
-
-                // who is out there?
-                radioGetAvailableOpponents( ops, MAX_OPPONENTS );
-
-                // let others know we are here
-                radioBroadcast( DISPLAY_NAME, seed );
 
                 // show who we found
                 for ( int i = 0; i < MAX_OPPONENTS; i++ )
