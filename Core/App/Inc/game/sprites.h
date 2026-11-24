@@ -1,6 +1,8 @@
 #ifndef SPRITES_U
 #define SPRITES_U
 
+#include <stdint.h>
+
 #define SpA_U 0x20
 #define SpA_L 0x30
 #define SpB_U 0x21
@@ -76,5 +78,17 @@
 #define Sp8_L 0x78
 #define Sp9_U 0x69 
 #define Sp9_L 0x79
+
+#define NUMBER_OF_SPRITES ( 128 )
+
+typedef uint8_t Sprite[2];
+
+/**
+ * @brief Get sprite data from index
+ * 
+ * @param[in] index Index of sprite.
+ * @param[out] sprite Sprite data.
+ */
+const Sprite *getSprite(uint8_t index);
 
 #endif

@@ -763,7 +763,8 @@ void gameTask(void *argument)
         {
             showPieceInDisplay(&heldPiece, HLD_LOCATION_X, HLD_LOCATION_Y);
         }
-        screenDrawBFDebug(background, foreground);
+        
+        screenDrawBF(background, foreground);
         
         osDelayUntil( osTick + GAME_TICK );
         osTick = osKernelGetTickCount();

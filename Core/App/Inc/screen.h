@@ -15,6 +15,10 @@ void screenReset(SpriteMap map);
 
 void screenPutSprite(SpriteMap map, uint8_t x, uint8_t y, SpriteIndex sprite_inx);
 
+void screenDraw(const SpriteMap map);
+void screenDrawBF(const SpriteMap back, const SpriteMap front);
+
+// Prints to USART for screen emulator
 void screenDrawDebug(const SpriteMap map);
 void screenDrawBFDebug(const SpriteMap back, const SpriteMap fore);
 

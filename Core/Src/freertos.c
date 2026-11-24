@@ -28,6 +28,7 @@
 #include "radio.h"
 #include "game.h"
 #include "input.h"
+#include "ssd1306.h"
 #include "usart.h"
 #include "stdio.h"
 #include "string.h"
@@ -238,6 +239,7 @@ void StartDefaultTask(void *argument)
     .spi        = &hspi2
   };
   radioInit( &hw );
+  ssd1306_Init();
 
   gameInit();
   /* Infinite loop */
