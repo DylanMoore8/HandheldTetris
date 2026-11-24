@@ -78,7 +78,7 @@ const osThreadAttr_t radioReceiver_attributes = {
   .cb_size = sizeof(radioReceiverControlBlock),
   .stack_mem = &radioReceiverBuffer[0],
   .stack_size = sizeof(radioReceiverBuffer),
-  .priority = (osPriority_t) osPriorityLow,
+  .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for radioTransmitte */
 osThreadId_t radioTransmitteHandle;
@@ -90,7 +90,7 @@ const osThreadAttr_t radioTransmitte_attributes = {
   .cb_size = sizeof(radioTransmitteControlBlock),
   .stack_mem = &radioTransmitteBuffer[0],
   .stack_size = sizeof(radioTransmitteBuffer),
-  .priority = (osPriority_t) osPriorityLow,
+  .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for inputProcessor */
 osThreadId_t inputProcessorHandle;
@@ -106,7 +106,7 @@ const osThreadAttr_t inputProcessor_attributes = {
 };
 /* Definitions for radioReceived */
 osMessageQueueId_t radioReceivedHandle;
-uint8_t radioReceivedBuffer[ 16 * 9 ];
+uint8_t radioReceivedBuffer[ 16 * 17 ];
 osStaticMessageQDef_t radioReceivedControlBlock;
 const osMessageQueueAttr_t radioReceived_attributes = {
   .name = "radioReceived",
@@ -117,7 +117,7 @@ const osMessageQueueAttr_t radioReceived_attributes = {
 };
 /* Definitions for radioTransmit */
 osMessageQueueId_t radioTransmitHandle;
-uint8_t radioTransmitBuffer[ 16 * 9 ];
+uint8_t radioTransmitBuffer[ 16 * 17 ];
 osStaticMessageQDef_t radioTransmitControlBlock;
 const osMessageQueueAttr_t radioTransmit_attributes = {
   .name = "radioTransmit",
@@ -185,10 +185,10 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the queue(s) */
   /* creation of radioReceived */
-  radioReceivedHandle = osMessageQueueNew (16, 9, &radioReceived_attributes);
+  radioReceivedHandle = osMessageQueueNew (16, 17, &radioReceived_attributes);
 
   /* creation of radioTransmit */
-  radioTransmitHandle = osMessageQueueNew (16, 9, &radioTransmit_attributes);
+  radioTransmitHandle = osMessageQueueNew (16, 17, &radioTransmit_attributes);
 
   /* creation of inputQueue */
   inputQueueHandle = osMessageQueueNew (16, 8, &inputQueue_attributes);

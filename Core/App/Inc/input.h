@@ -44,8 +44,8 @@ typedef enum
 
 typedef struct 
 {
-    inputType_t type;
-    inputState_t state;
+    uint32_t type; // inputType_t
+    uint32_t state; // inputState_t
 } inputEvent_t;
 
 void initInput( inputHw_t * hw );

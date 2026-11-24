@@ -44,12 +44,39 @@ static unsigned long sentPacketCount = 0;
 #define RADIO_RX_TIMEOUT_MS 2000 // max wait for the chip to enter RX
 #define RADIO_RX_POLL_MS    5    // receiver task poll period
 
+/* a beacon takes ~80ms (2x config + ~51ms airtime), so sending one every game
+   tick would leave the radio almost never in RX. Beacon slowly with some jitter
+   so two boards don't lock into transmitting at the same time */
+#define BEACON_PERIOD_MS 500
+#define BEACON_JITTER_MS 200
+
+#define SX1278_VERSION 0x12 // expected value of RegVersion
+
 availableOpponent availableOpponents[MAX_OPPONENTS] = {0};
+
+/**
+ * @brief override of the driver's weak delay. The default uses HAL_Delay, which
+ *        busy-waits and starves lower priority tasks (like the receiver task)
+ */
+void SX1278_hw_DelayMs( uint32_t msec )
+{
+    if ( osKernelGetState() == osKernelRunning )
+    {
+        osDelay( msec ? msec : 1 );
+    }
+    else
+    {
+        HAL_Delay( msec );
+    }
+}
 
 radioError_t radioInit( radiohw_t * hw )
 {
     /* get the radio hardware */
     if ( hw == NULL || hw->radioMutex == NULL ) return RADIO_ERR;
+    /* the queues are sized in CubeMX, make sure they still match our message */
+    if ( osMessageQueueGetMsgSize( hw->rxQueue ) != RADIO_MESSAGE_SIZE ||
+         osMessageQueueGetMsgSize( hw->txQueue ) != RADIO_MESSAGE_SIZE ) return RADIO_ERR;
     radio.hw = *hw;
     
     // initialize LoRa module
@@ -60,8 +87,12 @@ radioError_t radioInit( radiohw_t * hw )
 	moduleHw.reset.port = RADIO_RST_GPIO_Port;
 	moduleHw.reset.pin = RADIO_RST_Pin;
 	moduleHw.spi = hw->spi;
-    
+
     radio.module.hw = &moduleHw;
+
+    /* reset the chip and make sure we can talk to it over SPI */
+    SX1278_hw_Reset( &moduleHw );
+    if ( SX1278_SPIRead( &radio.module, RegVersion ) != SX1278_VERSION ) return RADIO_ERR;
 
     SX1278_init( &radio.module, 434000000, SX1278_POWER_20DBM, SX1278_LORA_SF_7,
 	    SX1278_LORA_BW_125KHZ, SX1278_LORA_CR_4_5, SX1278_LORA_CRC_EN, 10);
@@ -339,13 +370,23 @@ static bool getOpponentState( uint8_t opponentId, sessionState_t * state )
     return ret;
 }
 
-void radioBroadcast( char * displayName )
+void radioBroadcast( char * displayName, uint64_t seed )
 {
+    static uint32_t lastBeacon  = 0;
+    static uint32_t beaconDelay = BEACON_PERIOD_MS;
+
+    /* rate limit, see BEACON_PERIOD_MS */
+    uint32_t now = HAL_GetTick();
+    if ( ( now - lastBeacon ) < beaconDelay ) return;
+    lastBeacon  = now;
+    beaconDelay = BEACON_PERIOD_MS + ( ( now ^ ( getId() * 97u ) ) % BEACON_JITTER_MS );
+
     if ( radio.initialized && displayName != NULL &&
          osMutexAcquire( radio.hw.radioMutex, RADIO_MUTEX_TIMOUT_MS ) == osOK )
     {
         radioBeaconMessageContents_t beacon = {0};
         strncpy( (char *)beacon.displayName, displayName, DISPLAY_NAME_LEN );
+        beacon.seed = seed;
 
         /* if we are in a session, say so (read under the mutex so the
            receiver task can't change the session halfway through) */
@@ -381,7 +422,7 @@ void radioBroadcast( char * displayName )
     }
 }
 
-radioError_t radioSessionRequestJoin( uint8_t opponentId )
+radioError_t radioSessionRequestJoin( availableOpponent op, uint64_t localSeed, uint64_t * sessionSeed )
 {
     radioError_t err = RADIO_ERR;
     /* the session and opponent table are also updated by the receiver task */
@@ -389,27 +430,31 @@ radioError_t radioSessionRequestJoin( uint8_t opponentId )
          osMutexAcquire( radio.hw.radioMutex, RADIO_MUTEX_TIMOUT_MS ) == osOK )
     {
         sessionState_t opState = NONE;
-        bool waitingForUs = getOpponentState( opponentId, &opState );
+        bool waitingForUs = getOpponentState( op.id, &opState );
 
-        if ( findOpponent( opponentId ) == NULL )
+        if ( findOpponent( op.id ) == NULL )
         {
             /* opponent doesn't exist */
         }
         else if ( opState == WAITING && waitingForUs )
         {
             /* they already requested us, so we can join the session */
-            session.opponentId = opponentId;
+            session.opponentId = op.id;
             session.state      = IN_SESSION;
+            *sessionSeed       = op.id > getId() ? op.info.seed : localSeed; // use the larger ids seed
             err                = RADIO_OK;
         }
         else if ( opState == NONE )
         {
             /* they are idle, request them and wait for them to request us back */
-            session.opponentId = opponentId;
+            session.opponentId = op.id;
             session.state      = WAITING;
             err                = RADIO_OK;
         }
-        /* else they are waiting for someone else or in a game */
+        else
+        {
+            /* they waiting for someone else or in a game */
+        }
 
         osMutexRelease( radio.hw.radioMutex );
     }

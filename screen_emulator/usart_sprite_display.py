@@ -19,8 +19,8 @@ import serial
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SERIAL_PORT = "COM4"   # e.g. "COM3" on Windows
-BAUD_RATE = 576000
+SERIAL_PORT = "COM3"   # e.g. "COM3" on Windows
+BAUD_RATE = 115200
 SPRITE_MAP_PATH = "sprites.png"
 
 # Incoming data format:

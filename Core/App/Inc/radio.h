@@ -41,6 +41,7 @@ typedef struct __attribute__((packed))
     uint8_t state;
     uint8_t opponentId;
     uint8_t displayName[DISPLAY_NAME_LEN];
+    uint64_t seed;
 } radioBeaconMessageContents_t;
 #define BEACON_PKT_LEN sizeof( radioBeaconMessageContents_t )
 
@@ -91,8 +92,11 @@ radioError_t radioInit( radiohw_t * hw );
 
 /**
  * @brief Broadcast beacon message to look for lobby
+ * 
+ * @param[in] displayName the device name
+ * @param[in] seed the locally generated seed
  */
-void radioBroadcast( char * displayName );
+void radioBroadcast( char * displayName, uint64_t seed );
 
 /**
  * @brief get the available opponents
@@ -106,9 +110,11 @@ void radioGetAvailableOpponents( availableOpponent * ops, int len );
  * @brief Request to play with an opponent
  * 
  * @param[in] opponentId the opponent id of the opponent you want to play with
+ * @param[in] localSeed the seed generated on this device
+ * @param[out] sessionSeed the seed used for our session * DO NOT OVERWRITE YOUR OWN SEED *
  * @return err
  */
-radioError_t radioSessionRequestJoin( uint8_t opponentId );
+radioError_t radioSessionRequestJoin( availableOpponent op, uint64_t localSeed, uint64_t * sessionSeed );
 
 /**
  * @brief sends bytes over radio connection

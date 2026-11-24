@@ -28,4 +28,15 @@ void pcg32_init(uint64_t seed)
 	(void)pcg32();
 }
 
-
+/* obtained from an online example */
+uint64_t getSeed( ADC_HandleTypeDef *hadc )
+{
+    uint32_t noise = 0;
+    HAL_ADC_Start(hadc);
+    for (int i = 0; i < 4; i++) {
+        HAL_ADC_PollForConversion(hadc, 10);
+        noise ^= HAL_ADC_GetValue(hadc) << (i * 8);
+    }
+    HAL_ADC_Stop(hadc);
+    return noise;
+}

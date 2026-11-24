@@ -75,7 +75,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         .type  = pin,
         .state = isPressed ? INPUT_PRESSED : INPUT_RELEASED
     };
-
     /* send to queue */
     if ( osMessageQueuePut( inputQueueHandle, &event, 0, 0 ) == osOK )
     {

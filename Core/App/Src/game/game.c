@@ -9,8 +9,11 @@
 #include "rng.h"
 #include "input.h"
 #include "sprites.h"
+#include "radio.h"
+#include "adc.h"
 
 extern osMessageQueueId_t inputQueueHandle;
+extern ADC_HandleTypeDef hadc1;
 
 #define GAME_TICK ( 50 )
 #define TICKS_PER_SEC ( 1000 / GAME_TICK )
@@ -602,15 +605,19 @@ static void handleInput()
                     inputHoldKey = inputEvent.type; // Key to move repeatedly on hold
                     pieceMoveTickCount = PIECE_MOVE_TICKS; // Sets the piece to move immediately on input
                 } break;
-                case(INPUT_A): {
-                    pieceMove(&activePiece, PIECE_CW);
-                } break;
-                case(INPUT_B): {
+                case(INPUT_UP):
+                {
                     if( holdPieceLock == false )
                     {
                         holdPiece();
                         holdPieceLock = true; // Lock the hold functionality;
                     }
+                }
+                case(INPUT_A): {
+                    pieceMove(&activePiece, PIECE_CW);
+                } break;
+                case(INPUT_B): {
+                    pieceMove(&activePiece, PIECE_CCW);
                 } break;
                 default: {} break;
             }
@@ -648,22 +655,21 @@ static void handleMovement()
 
 typedef enum
 {
+    GAME_INIT,
     GAME_NORMAL,
     GAME_CLEAR_LINES,
     GAME_GAME_OVER,
 } GameState;
 
-static GameState gameState = GAME_NORMAL;
+static GameState gameState = GAME_INIT;
 
 void gameTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
   /* Infinite loop */
 
-    pcg32_init(4402);
-
-    placeNewPiece(&nextPiece);
-    placeNewPiece(&activePiece);
+    uint64_t seed = getSeed( &hadc1 );
+    uint64_t sessionSeed = 0;
 
     tickCount = 0;
     pieceFallTickCount = 0;
@@ -680,6 +686,57 @@ void gameTask(void *argument)
 
         switch( gameState )
         {
+            case(GAME_INIT):
+            {
+                // find a session 
+                availableOpponent ops[MAX_OPPONENTS] = {0};
+                availableOpponent selectedOpponent   = {0};
+
+                // who is out there?
+                radioGetAvailableOpponents( ops, MAX_OPPONENTS );
+
+                // let others know we are here
+                radioBroadcast( DISPLAY_NAME, seed );
+
+                // show who we found
+                for ( int i = 0; i < MAX_OPPONENTS; i++ )
+                {
+                    availableOpponent op = ops[i];
+                    if ( op.id != 0 )
+                    {
+                        // TODO: display opponent
+                        #ifndef REMOVE_ONCE_SELECT_IS_IMPLEMENTED
+                        memcpy( &selectedOpponent, &op, sizeof(availableOpponent));
+                        break;
+                        #endif
+                    }
+                }
+
+                // TODO: select available opponent
+                
+                if ( selectedOpponent.id != 0 ) 
+                {   
+                    // TODO: Print attempting to join...
+                    // request to join 
+                    if ( radioSessionRequestJoin( selectedOpponent, seed, &sessionSeed ) == RADIO_OK )
+                    {
+                        // start the rng
+                        pcg32_init( sessionSeed );
+                        placeNewPiece(&nextPiece);
+                        placeNewPiece(&activePiece);
+
+                        // we have entered a session 
+                        
+                        // TODO: print count down?
+
+                        gameState = GAME_NORMAL;
+                    }
+                    else
+                    {
+                        // TODO: print failed to join...
+                    }
+                }
+            } break;
             case(GAME_NORMAL):
             {
                 // Move pieces downwards
