@@ -14,6 +14,13 @@ extern osMessageQueueId_t inputQueueHandle;
 static inputHw_t inputHw = {0};
 static bool initialized = false;
 
+#define LOCKOUT_MS 5
+static uint32_t     lastEdgeMs[INPUT_B + 1];
+static inputState_t lastState[INPUT_B + 1] = {
+    INPUT_RELEASED, INPUT_RELEASED, INPUT_RELEASED,
+    INPUT_RELEASED, INPUT_RELEASED, INPUT_RELEASED
+};
+
 void initInput( inputHw_t * hw )
 {
     if ( hw == NULL ) return;
@@ -29,6 +36,7 @@ void initInput( inputHw_t * hw )
   */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+    
     if ( !initialized ) return;
     
     inputType_t   pin;
@@ -68,17 +76,26 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         return; // no pin
     }
 
+    /* debounce: ignore edges within LOCKOUT_MS of the last accepted change */
+    uint32_t now = HAL_GetTick();
+    if ( (now - lastEdgeMs[pin]) < LOCKOUT_MS ) return;
+
     bool isPressed = (HAL_GPIO_ReadPin(port, GPIO_Pin) == GPIO_PIN_RESET);
+    inputState_t state = isPressed ? INPUT_PRESSED : INPUT_RELEASED;
+    if ( state == lastState[pin] ) return; // no change
+
+    lastEdgeMs[pin] = now;
+    lastState[pin]  = state;
 
     /* build our key press event data structure */
     inputEvent_t event = {
         .type  = pin,
-        .state = isPressed ? INPUT_PRESSED : INPUT_RELEASED
+        .state = state
     };
     /* send to queue */
     if ( osMessageQueuePut( inputQueueHandle, &event, 0, 0 ) == osOK )
     {
-        // ok
+        // pass
     }
 }
 
