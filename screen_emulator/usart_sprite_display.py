@@ -21,7 +21,7 @@ import serial
 # ----------------------------------------------------------------------------
 SERIAL_PORT = "COM3"   # e.g. "COM3" on Windows
 BAUD_RATE = 115200
-SPRITE_MAP_PATH = "sprites.png"
+SPRITE_MAP_PATH = "./screen_emulator/sprites.png"
 
 # Incoming data format:
 #   "hex" - ASCII hex characters (e.g. "0011ABCD"), messages end with '\n' (0x0A)
