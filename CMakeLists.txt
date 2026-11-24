@@ -48,11 +48,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/App/Src/game/game.c
     Core/App/Src/game/rng.c
+    Core/App/Src/game/sprites.c
     Core/App/Src/screen.c
     Core/App/Src/input.c
     Core/App/Src/radio.c
     Drivers/SX1278/SX1278/driver/SX1278.c
     Drivers/SX1278/SX1278/driver/SX1278_hw.c
+    Drivers/ssd1306/ssd1306.c
     # HAL TIM driver: needed for the TIM2 HAL timebase (CubeMX omits it)
     # Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
     # Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
@@ -64,6 +66,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Core/App/Inc
     Core/App/Inc/game
     Drivers/SX1278/SX1278/driver
+    Drivers/ssd1306
 )
 
 # load defs from config file

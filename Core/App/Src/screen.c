@@ -1,7 +1,15 @@
 #include "screen.h"
 #include "stm32f4xx.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "cmsis_os.h"
+#include "cmsis_os2.h"
+#include "ssd1306.h"
 #include <string.h>
 #include <stdio.h>
+#include "sprites.h"
+
+static uint8_t screenBuffer[SSD1306_BUFFER_SIZE];
 
 void screenReset(SpriteMap map)
 {
@@ -11,6 +19,160 @@ void screenReset(SpriteMap map)
 void screenPutSprite(SpriteMap map, uint8_t x, uint8_t y, SpriteIndex sprite_inx)
 {
     map[y][x] = sprite_inx;
+}
+
+// So, with the scheme of the ssd1306, bytes are written as so:
+/*
+    ------------------------------------------------------------------
+    |01(127)7                                                         |
+    |01(126)7                                                         |
+    |01(125)7                                                         |
+    |01(124)7                                                         |
+    |01(123)7                                                         |
+    |01(122)7                                                         |
+                                    ...
+    |01(2)567     /\                                                  |
+    |01(1)567     ||                                                  |
+    |01(0)567 01(128)7                                                |
+    ------------------------------------------------------------------
+
+Where 0 is the MSB, 7 is LSB, (n) is buffer[n].                               
+
+My thought is to draw **two sprites at a time (2x1)** like so:
+
+    0 1 2 3|4 5 6 7 (3)
+    0 1 2 3|4 5 6 7 (2)
+    0 1 2 3|4 5 6 7 (1)
+    0 1 2 3|4 5 6 7 (0)
+
+or
+
+    sprite1 | sprite2
+
+Where boundaries define the sprites. Every 2x1 grid of sprites would be processed from 
+bottom-left to top-right.
+
+Sprites are organized as so: every nibble is stacked sequentially from top to bottom.
+So for the sprite:
+
+    @@@@
+    @..@
+    @..@
+    @@@@
+
+Would be defined as:
+
+    0123 \ of byte
+    4567 /    0
+    0123 \ of byte
+    4567 /    1
+
+Together:
+
+    Sp1  | Sp2
+    0123 | 0123 \ of byte
+    4567 | 4567 /    0
+    0123 | 0123 \ of byte
+    4567 | 4567 /    1
+
+So here's how sprite1 and sprite2 should be sent:
+
+    [MSN, byte 0, sprite 2] | [MSN, byte 0, sprite 1],
+    [LSN, byte 0, sprite 2] | [LSN, byte 0, sprite 1],
+    [MSN, byte 0, sprite 2] | [MSN, byte 0, sprite 1],
+    [LSN, byte 0, sprite 2] | [LSN, byte 0, sprite 1],
+
+Where MSN is most significant nibble, LSN is least significant nibble.
+
+Converting that into operations:
+
+    [byte 1, sprite 2] & 0xF0 | [byte 1, sprite 1] >> 4,
+    [byte 1, sprite 2] >> 4   | [byte 1, sprite 1] & 0x0F,
+    [byte 0, sprite 2] & 0xF0 | [byte 0, sprite 1] << 4,
+    [byte 0, sprite 2] << 4   | [byte 0, sprite 1] & 0x0F,
+*/
+void screenDraw(const SpriteMap map)
+{
+    uint8_t spriteX = 0;
+    uint8_t spriteY = SCREEN_SPRITE_HEIGHT - 1;
+
+    const Sprite *sprite1;
+    const Sprite *sprite2;
+
+    for( uint32_t i = 0; i < SSD1306_BUFFER_SIZE; i += 4 )
+    {
+        sprite1 = getSprite(map[spriteY][spriteX  ]);
+        sprite2 = getSprite(map[spriteY][spriteX+1]);
+
+        screenBuffer[ i+3 ] = ( (*sprite2)[0] << 4 )   | ( (*sprite1)[0] & 0x0F );
+        screenBuffer[ i+2 ] = ( (*sprite2)[0] & 0xF0 ) | ( (*sprite1)[0] >> 4 );
+        screenBuffer[ i+1 ] = ( (*sprite2)[1] << 4 )   | ( (*sprite1)[1] & 0x0F );
+        screenBuffer[  i  ] = ( (*sprite2)[1] & 0xF0 ) | ( (*sprite1)[1] >> 4 );
+
+        if( spriteY != 0 )
+        {
+            spriteY--;
+        }
+        else
+        {
+            spriteX += 2;
+            spriteY = SCREEN_SPRITE_HEIGHT - 1;
+        }
+    }
+
+    ssd1306_WriteBuffer(screenBuffer);
+}
+
+void screenDrawBF(const SpriteMap back, const SpriteMap front)
+{
+    uint8_t spriteX = 0;
+    uint8_t spriteY = SCREEN_SPRITE_HEIGHT - 1;
+
+    const Sprite *sprite1;
+    const Sprite *sprite2;
+
+    SpriteIndex si1, si2;
+
+    for( uint32_t i = 0; i < SSD1306_BUFFER_SIZE; i += 4 )
+    {
+        si1 = front[spriteY][spriteX];
+        if( si1 == SPRITE_EMPTY )
+        {
+            si1 = back[spriteY][spriteX];
+        }
+
+        si2 = front[spriteY][spriteX+1];
+        if( si2 == SPRITE_EMPTY )
+        {
+            si2 = back[spriteY][spriteX+1];
+        }
+
+        sprite1 = getSprite(si1);
+        sprite2 = getSprite(si2);
+
+        // Sp1  | Sp2
+        // 0123 | 0123 \ of byte
+        // 4567 | 4567 /    0
+        // 0123 | 0123 \ of byte
+        // 4567 | 4567 /    1
+
+        screenBuffer[ i+3 ] = ( (*sprite2)[0] << 4 )   | ( (*sprite1)[0] & 0x0F );
+        screenBuffer[ i+2 ] = ( (*sprite2)[0] & 0xF0 ) | ( (*sprite1)[0] >> 4 );
+        screenBuffer[ i+1 ] = ( (*sprite2)[1] << 4 )   | ( (*sprite1)[1] & 0x0F );
+        screenBuffer[  i  ] = ( (*sprite2)[1] & 0xF0 ) | ( (*sprite1)[1] >> 4 );
+
+        if( spriteY != 0 )
+        {
+            spriteY--;
+        }
+        else
+        {
+            spriteX += 2;
+            spriteY = SCREEN_SPRITE_HEIGHT - 1;
+        }
+    }
+
+    ssd1306_WriteBuffer(screenBuffer);
 }
 
 void screenDrawDebug(const SpriteMap map)
@@ -52,4 +214,26 @@ void screenDrawBFDebug(const SpriteMap back, const SpriteMap front)
         }
     }
     HAL_UART_Transmit(&huart2, &(uint8_t){ 0xFF }, 1, HAL_MAX_DELAY);
+}
+
+osThreadId_t screenTaskHandle;
+uint32_t screenTaskBuffer[ 512 ];
+StaticTask_t screenTaskControlBlock;
+const osThreadAttr_t screenTask_attributes = {
+  .name = "screenTask",
+  .cb_mem = &screenTaskControlBlock,
+  .cb_size = sizeof(screenTaskControlBlock),
+  .stack_mem = &screenTaskBuffer[0],
+  .stack_size = sizeof(screenTaskBuffer),
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+void screenTask(void)
+{
+    
+}
+
+void screenInit(void)
+{
+    screenTaskHandle = osThreadNew(screenTask, NULL, &screenTask_attributes);
 }

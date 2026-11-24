@@ -27,7 +27,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+// TODO: Remove
+#include "ssd1306.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,7 +60,7 @@ void MX_FREERTOS_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+uint8_t screen_buf[SSD1306_BUFFER_SIZE] = { 0 };
 /* USER CODE END 0 */
 
 /**
@@ -96,6 +97,28 @@ int main(void)
   MX_SPI2_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
+
+  for (uint8_t addr = 1; addr < 128; addr++)
+  {
+      // HAL expects the 7-bit address shifted left by 1
+      if (HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t)(addr << 1), 2, 10) == HAL_OK)
+      {
+          __NOP();   // 7-bit address
+      }
+  }
+
+  ssd1306_Init();
+  
+  screen_buf[0] = 0b10101010;
+  screen_buf[1] = 0b01010101;
+  screen_buf[2] = 0b11001100;
+  screen_buf[3] = 0b00110011;
+  screen_buf[4] = 0b11110000;
+  screen_buf[5] = 0b00001111;
+  screen_buf[6] = 0b11111111;
+  screen_buf[7] = 0b00000000;
+
+  ssd1306_WriteBuffer(screen_buf);
 
   /* USER CODE END 2 */
 
