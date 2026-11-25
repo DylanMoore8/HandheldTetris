@@ -7,9 +7,11 @@
 #include "ssd1306.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include "sprites.h"
 
 static uint8_t screenBuffer[SSD1306_BUFFER_SIZE];
+static char numberBuffer[16];
 
 void screenReset(SpriteMap map)
 {
@@ -19,6 +21,37 @@ void screenReset(SpriteMap map)
 void screenPutSprite(SpriteMap map, uint8_t x, uint8_t y, SpriteIndex sprite_inx)
 {
     map[y][x] = sprite_inx;
+}
+
+void screenPutText(SpriteMap map, uint8_t x, uint8_t y, char * text)
+{
+    if( (y + 1) < SCREEN_SPRITE_HEIGHT ) // If the bottom of text is not clipping bottom of screen.
+    {
+        uint8_t i = 0;
+        uint8_t cur_x = x;
+
+        char c = text[i];
+        while( ( c != 0 ) && ( cur_x < SCREEN_SPRITE_WIDTH ) )
+        {
+            SpriteCharacter_t sprChar;
+            if( getSpriteFromChar(c, &sprChar) )
+            {
+                map[ y ][cur_x] = sprChar.top;
+                map[y+1][cur_x] = sprChar.bottom;
+            }
+
+            i++;
+            cur_x++;
+
+            c = text[i];
+        }
+    }
+}
+
+void screenPutNumber(SpriteMap map, uint8_t x, uint8_t y, uint32_t num)
+{
+    sprintf(numberBuffer, "%lu", num);
+    screenPutText(map, x, y, numberBuffer);
 }
 
 // So, with the scheme of the ssd1306, bytes are written as so:

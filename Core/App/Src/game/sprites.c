@@ -1,4 +1,10 @@
 #include "sprites.h"
+#include <stdbool.h>
+
+#define LETTERS_TOP_OFFSET ( 0x20 )
+#define LETTERS_BOT_OFFSET ( 0x30 )
+#define NUMBERS_TOP_OFFSET ( 0x60 )
+#define NUMBERS_BOT_OFFSET ( 0x70 )
 
 static const Sprite spriteMap[NUMBER_OF_SPRITES] = 
 {
@@ -135,4 +141,41 @@ static const Sprite spriteMap[NUMBER_OF_SPRITES] =
 const Sprite *getSprite(uint8_t index)
 {
     return &spriteMap[index];
+}
+
+static bool getSpriteFromChar( char c, SpriteCharacter_t *spr_chr )
+{
+    bool foundSprite = true;
+    if( c >= 'A' || c <= 'Z' )
+    {
+        spr_chr->top    = (c - 'A') + LETTERS_TOP_OFFSET;
+        spr_chr->bottom = (c - 'A') + LETTERS_BOT_OFFSET;
+    }
+    else if( c >= 'a' || c <= 'b' )
+    {
+        spr_chr->top    = (c - 'a') + LETTERS_TOP_OFFSET;
+        spr_chr->bottom = (c - 'a') + LETTERS_BOT_OFFSET;
+    }
+    else if( c >= '0' || c <= '9' )
+    {
+        spr_chr->top = (c - '0') + NUMBERS_TOP_OFFSET;
+        spr_chr->bottom = (c - '0') + NUMBERS_BOT_OFFSET;
+    }
+    else if( c == ' ' )
+    {
+        // Empty sprite
+        spr_chr->top = SPRITE_EMPTY;
+        spr_chr->bottom = SPRITE_EMPTY;
+    }
+    else if( c == ':')
+    {
+        spr_chr->top = SpCLN;
+        spr_chr->bottom = SpCLN;
+    }
+    else
+    {
+        foundSprite = false;
+    }
+    
+    return foundSprite;
 }

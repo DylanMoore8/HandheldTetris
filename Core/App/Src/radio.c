@@ -449,7 +449,6 @@ radioError_t radioSessionRequestJoin( availableOpponent op, uint64_t localSeed, 
             /* they are idle, request them and wait for them to request us back */
             session.opponentId = op.id;
             session.state      = WAITING;
-            err                = RADIO_OK;
         }
         else
         {

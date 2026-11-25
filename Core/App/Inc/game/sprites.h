@@ -81,6 +81,16 @@
 
 #define NUMBER_OF_SPRITES ( 128 )
 
+#define SPRITE_EMPTY ( 0 )
+
+typedef uint8_t SpriteIndex;
+
+typedef struct
+{
+    SpriteIndex top;
+    SpriteIndex bottom;
+} SpriteCharacter_t;
+
 typedef uint8_t Sprite[2];
 
 /**
@@ -90,5 +100,15 @@ typedef uint8_t Sprite[2];
  * @param[out] sprite Sprite data.
  */
 const Sprite *getSprite(uint8_t index);
+
+/**
+ * @brief Get the sprite indicies from a char.
+ * 
+ * @param[in] c Char to get sprite from.
+ * @param[out] spr_chr Sprite representing char.
+ * @return true Sprite found
+ * @return false Sprite not found.
+ */
+static bool getSpriteFromChar( char c, SpriteCharacter_t *spr_chr );
 
 #endif
