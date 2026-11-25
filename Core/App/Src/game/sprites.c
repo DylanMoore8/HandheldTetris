@@ -143,20 +143,22 @@ const Sprite *getSprite(uint8_t index)
     return &spriteMap[index];
 }
 
-static bool getSpriteFromChar( char c, SpriteCharacter_t *spr_chr )
+bool getSpriteFromChar( char c, SpriteCharacter_t *spr_chr )
 {
     bool foundSprite = true;
-    if( c >= 'A' || c <= 'Z' )
+    if( c >= 'A' && c <= 'Z' )
     {
-        spr_chr->top    = (c - 'A') + LETTERS_TOP_OFFSET;
-        spr_chr->bottom = (c - 'A') + LETTERS_BOT_OFFSET;
+        uint8_t rowOffset = ( c >= 'Q' ) ? 0x10 : 0;
+        spr_chr->top    = (c - 'A') + LETTERS_TOP_OFFSET + rowOffset;
+        spr_chr->bottom = (c - 'A') + LETTERS_BOT_OFFSET + rowOffset;
     }
-    else if( c >= 'a' || c <= 'b' )
+    else if( c >= 'a' && c <= 'z' )
     {
-        spr_chr->top    = (c - 'a') + LETTERS_TOP_OFFSET;
-        spr_chr->bottom = (c - 'a') + LETTERS_BOT_OFFSET;
+        uint8_t rowOffset = ( c >= 'q' ) ? 0x10 : 0;
+        spr_chr->top    = (c - 'a') + LETTERS_TOP_OFFSET + rowOffset;
+        spr_chr->bottom = (c - 'a') + LETTERS_BOT_OFFSET + rowOffset;
     }
-    else if( c >= '0' || c <= '9' )
+    else if( c >= '0' && c <= '9' )
     {
         spr_chr->top = (c - '0') + NUMBERS_TOP_OFFSET;
         spr_chr->bottom = (c - '0') + NUMBERS_BOT_OFFSET;
@@ -176,6 +178,6 @@ static bool getSpriteFromChar( char c, SpriteCharacter_t *spr_chr )
     {
         foundSprite = false;
     }
-    
+
     return foundSprite;
 }

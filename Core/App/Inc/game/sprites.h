@@ -2,6 +2,7 @@
 #define SPRITES_U
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define SpA_U 0x20
 #define SpA_L 0x30
@@ -109,6 +110,6 @@ const Sprite *getSprite(uint8_t index);
  * @return true Sprite found
  * @return false Sprite not found.
  */
-static bool getSpriteFromChar( char c, SpriteCharacter_t *spr_chr );
+bool getSpriteFromChar( char c, SpriteCharacter_t *spr_chr );
 
 #endif

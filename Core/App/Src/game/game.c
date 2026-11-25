@@ -655,13 +655,27 @@ static void handleMovement()
 
 typedef enum
 {
+    GAME_TITLE,
     GAME_INIT,
-    GAME_NORMAL,
-    GAME_CLEAR_LINES,
-    GAME_GAME_OVER,
-} GameState;
+    GAME_SESSION,
+} GameState_t;
 
-static GameState gameState = GAME_INIT;
+typedef enum
+{
+    GAME_SESSION_PLAYING,
+    GAME_SESSION_CLEAR_LINES,
+    GAME_SESSION_OVER
+} GameSessionState_t;
+
+typedef enum
+{
+    GAME_TITLE_MAIN,
+    GAME_TITLE_SEARCH,
+} GameTitleState_t;
+
+static GameState_t gameState = GAME_TITLE;
+static GameSessionState_t gameSessionState = GAME_SESSION_PLAYING;
+static GameTitleState_t gameTitleState = GAME_TITLE_MAIN;
 
 void gameTask(void *argument)
 {
@@ -670,6 +684,8 @@ void gameTask(void *argument)
 
     uint64_t seed = getSeed( &hadc1 );
     uint64_t sessionSeed = 0;
+
+    uint8_t cursorPosition = 0;
 
     tickCount = 0;
     pieceFallTickCount = 0;
@@ -694,8 +710,20 @@ void gameTask(void *argument)
 
         switch( gameState )
         {
+            case(GAME_TITLE):
+            {
+                screenPutText(foreground, 5, 5, "TETRIS");
+                screenPutText(foreground, 4, 8, "DYLAN M.");
+                screenPutText(foreground, 4, 11, "CALLUM M.");
+
+                screenPutText(foreground, 6, 20, "SOLO");
+                screenPutText(foreground, 3, 23, "MULTIPLAYER");
+
+                screenDraw(foreground);
+            } break;
             case(GAME_INIT):
             {
+#ifndef DEBUG
                 // find a session 
                 availableOpponent selectedOpponent   = {0};
 
@@ -716,113 +744,126 @@ void gameTask(void *argument)
                 // TODO: select available opponent
                 
                 if ( selectedOpponent.id != 0 ) 
-                {   
+                {
                     // TODO: Print attempting to join...
                     // request to join 
                     if ( radioSessionRequestJoin( selectedOpponent, seed, &sessionSeed ) == RADIO_OK )
                     {
+#endif
                         // start the rng
                         pcg32_init( sessionSeed );
                         placeNewPiece(&nextPiece);
                         placeNewPiece(&activePiece);
-
                         // we have entered a session 
                         
                         // TODO: print count down?
-
-                        gameState = GAME_NORMAL;
+                        
+                        gameState = GAME_SESSION;
+                        gameSessionState = GAME_SESSION_PLAYING;
+#ifndef DEBUG                      
                     }
                     else
                     {
                         // TODO: print failed to join...
                     }
                 }
+#endif
             } break;
-            case(GAME_NORMAL):
+            case(GAME_SESSION):
             {
-                // Move pieces downwards
-                if( pieceFallTickCount == PIECE_FALL_TICKS )
+                switch(gameSessionState)
                 {
-                    bool hit_block = !pieceMove(&activePiece, PIECE_DOWN);
-                    if( hit_block )
+                    case(GAME_SESSION_PLAYING):
                     {
-                        pieceLanded = true;
-                    }
-        
-                    pieceFallTickCount = 0;
-                }
-        
-                if( !pieceLanded ) // Stop input if a piece lands
-                {
-                    handleInput();
-                    if( pieceMoveTickCount == PIECE_MOVE_TICKS )
-                    {
-                        handleMovement();
-                        pieceMoveTickCount = 0;
-                    }
-                    pieceMoveTickCount++;
-                }
-                else // If a piece lands
-                {
-                    landPieceAndCheckLines();
-                    if( fullLinesAvailable ) // If a full line is available:
-                    {
-                        clearAnimationTickCount = 0;
-                        lineClearBlockAnimation = 0;
-                        gameState = GAME_CLEAR_LINES; // Transition to show clear lines animation
-                    }
-                    if( pieceOverlapping( &activePiece ) ) // Piece is clipping immediately after spawning
-                    {
-                        gameState = GAME_GAME_OVER;
-                    }
-                    pieceLanded = false; // Reset the flag
-                    holdPieceLock = false; // Release the hold functionality
-                }
-
-                pieceFallTickCount++;
-            } break;
-            case(GAME_CLEAR_LINES):
-            {
-                if( clearAnimationTickCount == CLEAR_ANIMATION_TICKS ) // If the animation tick is triggered:
-                {
-                    if( lineClearBlockAnimation != BOARD_WIDTH ) // If the animation is not finished:
-                    {
-                        for( uint8_t i = 0; i < fullLinesSize; i++ ) // For every full line:
+                        // Move pieces downwards
+                        if( pieceFallTickCount == PIECE_FALL_TICKS )
                         {
-                            uint8_t lineIndex = fullLines[i]; // Get the full line index:
-                            board[lineIndex][lineClearBlockAnimation] = BLOCK_TYPE_EMPTY; // Set the current animation block to clear.
+                            bool hit_block = !pieceMove(&activePiece, PIECE_DOWN);
+                            if( hit_block )
+                            {
+                                pieceLanded = true;
+                            }
+                
+                            pieceFallTickCount = 0;
+                        }
+                
+                        if( !pieceLanded ) // Stop input if a piece lands
+                        {
+                            handleInput();
+                            if( pieceMoveTickCount == PIECE_MOVE_TICKS )
+                            {
+                                handleMovement();
+                                pieceMoveTickCount = 0;
+                            }
+                            pieceMoveTickCount++;
+                        }
+                        else // If a piece lands
+                        {
+                            landPieceAndCheckLines();
+                            if( fullLinesAvailable ) // If a full line is available:
+                            {
+                                clearAnimationTickCount = 0;
+                                lineClearBlockAnimation = 0;
+                                gameSessionState = GAME_SESSION_CLEAR_LINES; // Transition to show clear lines animation
+                            }
+                            if( pieceOverlapping( &activePiece ) ) // Piece is clipping immediately after spawning
+                            {
+                                gameSessionState = GAME_SESSION_OVER;
+                            }
+                            pieceLanded = false; // Reset the flag
+                            holdPieceLock = false; // Release the hold functionality
                         }
 
-                        lineClearBlockAnimation++;
-                        clearAnimationTickCount = 0;
-                    }
-                    else
+                        pieceFallTickCount++;
+                    } break;
+                    case(GAME_SESSION_CLEAR_LINES):
                     {
-                        fallFullLines();
+                        if( clearAnimationTickCount == CLEAR_ANIMATION_TICKS ) // If the animation tick is triggered:
+                        {
+                            if( lineClearBlockAnimation != BOARD_WIDTH ) // If the animation is not finished:
+                            {
+                                for( uint8_t i = 0; i < fullLinesSize; i++ ) // For every full line:
+                                {
+                                    uint8_t lineIndex = fullLines[i]; // Get the full line index:
+                                    board[lineIndex][lineClearBlockAnimation] = BLOCK_TYPE_EMPTY; // Set the current animation block to clear.
+                                }
 
-                        pieceFallTickCount = 0;
-                        pieceMoveTickCount = 0;
-                        gameState = GAME_NORMAL;
-                    }
+                                lineClearBlockAnimation++;
+                                clearAnimationTickCount = 0;
+                            }
+                            else
+                            {
+                                fallFullLines();
+
+                                pieceFallTickCount = 0;
+                                pieceMoveTickCount = 0;
+                                gameState = GAME_SESSION;
+                            }
+                        }
+
+                        clearAnimationTickCount++;
+                    } break;
+                    case(GAME_SESSION_OVER):
+                    {
+                        
+                    } break;
                 }
 
-                clearAnimationTickCount++;
-            } break;
-            case(GAME_GAME_OVER):
-            {
-                // TODO
-            } break;
-        }
+                drawBoard();
+                drawPiece(&activePiece);
+                showPieceInDisplay(&nextPiece, NXT_LOCATION_X, NXT_LOCATION_Y);
+                if( heldPieceAvailable )
+                {
+                    showPieceInDisplay(&heldPiece, HLD_LOCATION_X, HLD_LOCATION_Y);
+                }
+                if( gameSessionState == GAME_SESSION_OVER )
+                {
+                    screenPutText(foreground, 3, 14, "GAME OVER");
+                }
+                screenDrawBF(background, foreground);
 
-        drawBoard();
-        drawPiece(&activePiece);
-        showPieceInDisplay(&nextPiece, NXT_LOCATION_X, NXT_LOCATION_Y);
-        if( heldPieceAvailable )
-        {
-            showPieceInDisplay(&heldPiece, HLD_LOCATION_X, HLD_LOCATION_Y);
+            } break;
         }
-        
-        screenDrawBF(background, foreground);
         
         osDelayUntil( osTick + GAME_TICK );
         osTick = osKernelGetTickCount();
