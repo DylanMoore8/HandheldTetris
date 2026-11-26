@@ -58,6 +58,8 @@
 #define SpZ_L 0x59
 
 #define SpCLN 0x5A
+#define SpEX_U 0x6A
+#define SpEX_L 0x7A
 
 #define Sp0_U 0x60 
 #define Sp0_L 0x70

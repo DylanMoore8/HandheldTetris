@@ -4,7 +4,7 @@
 typedef enum
 {
     GAME_MODE_SOLO,
-    GAME_MODE_MULTI
+    GAME_MODE_VS
 } GameMode_t;
 
 /**

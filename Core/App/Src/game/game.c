@@ -47,7 +47,7 @@ static void gameTask(void *argument)
     
             map = currentState->render();
             screenDraw(*map);
-            screenDrawDebug(*map);
+            //screenDrawDebug(*map);
         }
 
         osDelayUntil( lastTicks + TICKS_PER_SEC );

@@ -1,8 +1,10 @@
 #include "game.h"
 #include "screen.h"
 #include "rng.h"
+#include "radio.h"
 #include <string.h>
 #include "state_stack.h"
+#include "globals.h"
 
 // GAME SESSION
 
@@ -11,6 +13,8 @@
 #define PIECE_FALL_TICKS ( 500 / GAME_TICK )
 #define PIECE_MOVE_TICKS ( 100 / GAME_TICK )
 #define CLEAR_ANIMATION_TICKS ( 50 / GAME_TICK )
+#define LINES_FLASH_ANIMATION_TICKS ( 100 / GAME_TICK )
+#define PUSHED_LINES_TICKS ( 4000 / GAME_TICK )
 #define GAME_OVER_TICKS ( 5000 / GAME_TICK )
 #define INPUT_HOLD_NONE ( 255 )
 
@@ -25,6 +29,8 @@
 #define NXT_LOCATION_Y 13
 #define HLD_LOCATION_X 13
 #define HLD_LOCATION_Y 21
+
+#define PUSHED_LINES_QUEUE_SIZE 8
 
 const static SpriteMap background = {
   {  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  },
@@ -184,6 +190,14 @@ typedef enum
     PIECE_CCW,    
 } PieceMovements;
 
+typedef struct
+{
+    uint8_t lines[PUSHED_LINES_QUEUE_SIZE];
+    uint8_t bottom;
+    uint8_t top;
+    uint8_t count;
+} PushedLinesQueue;
+
 typedef enum
 {
     GAME_SESSION_PLAYING,
@@ -202,6 +216,9 @@ uint32_t clearAnimationTickCount;
 uint32_t gameOverTickCount;
 uint32_t lineClearBlockAnimation;
 
+uint32_t pushedLinesFlashAnimation;
+uint32_t pushedLinesTickCount;
+
 bool pieceLanded;
 bool holdPieceLock;
 
@@ -217,6 +234,11 @@ bool fullLinesAvailable;
 uint8_t fullLines[BOARD_HEIGHT];
 uint8_t fullLinesSize;
 
+PushedLinesQueue pushedLinesQueue;
+bool pushedLinesInProgress;
+uint8_t linesBeingPushed;
+
+
 PieceActive nextPiece;
 PieceActive heldPiece;
 PieceActive activePiece;
@@ -227,6 +249,8 @@ SessionGameState_t sessionGameState;
 
 uint32_t p1Score;
 uint32_t p2Score;
+
+GameMode_t gameMode;
 
 // FUNCTIONS
 
@@ -613,6 +637,66 @@ static uint32_t scoreByLines( uint8_t lineCount )
     return score;
 }
 
+static bool pushLines( uint8_t lineCount )
+{
+    bool rc = false;
+
+    if( pushedLinesQueue.count != PUSHED_LINES_QUEUE_SIZE )
+    {
+        pushedLinesQueue.lines[pushedLinesQueue.top++] = lineCount;
+        if( pushedLinesQueue.top == PUSHED_LINES_QUEUE_SIZE ) // If top overflowed:
+        {
+            // Wrap around to 0.
+            pushedLinesQueue.top = 0;
+        }
+        pushedLinesQueue.count++;
+        rc = true;
+    }
+    return rc;
+}
+
+static bool popLines( uint8_t *lineCount )
+{
+    bool rc = false;
+
+    if( pushedLinesQueue.count != 0 )
+    {
+        *lineCount = pushedLinesQueue.lines[pushedLinesQueue.bottom++];
+        if( pushedLinesQueue.bottom == PUSHED_LINES_QUEUE_SIZE ) // If top overflowed:
+        {
+            // Wrap around to 0.
+            pushedLinesQueue.bottom = 0;
+        }
+        pushedLinesQueue.count--;
+        rc = true;
+    }
+    return rc;
+}
+
+static bool pushedLinesAvailable()
+{
+    return ( pushedLinesQueue.count != 0 );
+}
+
+/**
+ * @brief Handles P2 sends.
+ * 
+ */
+static void handleP2()
+{
+    radioDataMessageContents_t p2Data;
+    radioError_t resp = radioGetData( &p2Data );
+    if( resp == RADIO_OK )
+    {
+        if( p2Data.lines > 0 ) // If P2 is sending lines:
+        {
+            pushLines(p2Data.lines);
+        }
+        p2Score = p2Data.score; // Update score
+        // TODO: Handle game state
+    }
+}
+
 // CALLBACKS
 
 void sessionEnter()
@@ -634,7 +718,24 @@ void sessionEnter()
 
     inputHoldKey = INPUT_HOLD_NONE;
 
+    // pushed lines queue is empty
+    pushedLinesQueue.top = 0;
+    pushedLinesQueue.bottom = 0;
+    pushedLinesQueue.count = 0;
+
+    pushedLinesFlashAnimation = 0;
+    pushedLinesTickCount = 0;
+    pushedLinesInProgress = false;
+    linesBeingPushed = 0;
+
+    pushLines(4);
+    pushLines(3);
+    pushLines(2);
+    pushLines(1);
+
     sessionGameState = GAME_SESSION_PLAYING;
+
+    gameMode = getGameMode();
 
     memset( board, BLOCK_TYPE_EMPTY, sizeof(BlockType) * BOARD_WIDTH * BOARD_HEIGHT );
     memset( foreground, 0, SCREEN_SPRITE_HEIGHT * SCREEN_SPRITE_WIDTH );
@@ -691,6 +792,37 @@ void sessionUpdate( )
     {
         case(GAME_SESSION_PLAYING):
         {
+            if( gameMode == GAME_MODE_VS )
+            {
+                handleP2(); // Handle P2 receive events.
+            }
+
+            if( !pushedLinesInProgress && pushedLinesAvailable() ) // If pushed lines available and not already pushing lines:
+            {
+                pushedLinesInProgress = true;
+                pushedLinesFlashAnimation = 0;
+                pushedLinesTickCount = 0;
+
+                popLines(&linesBeingPushed);
+            }
+
+            if( pushedLinesInProgress )
+            {
+                if( pushedLinesFlashAnimation == LINES_FLASH_ANIMATION_TICKS )
+                {
+                    pushedLinesFlashAnimation = 0;
+                }
+                pushedLinesFlashAnimation++;
+
+                if( pushedLinesTickCount == PUSHED_LINES_TICKS )
+                {
+                    // TODO
+                    //pushUpLines( linesBeingPushed );
+                    pushedLinesInProgress = false;
+                }
+                pushedLinesTickCount++;
+            }
+
             // Move pieces downwards
             if( pieceFallTickCount == PIECE_FALL_TICKS )
             {
@@ -786,7 +918,22 @@ SpriteMap *sessionRender( )
 
     // Display scores.
     screenPutNumber(foreground, 9, 1, p1Score);
-    screenPutNumber(foreground, 9, 4, p2Score);
+    if( gameMode == GAME_MODE_VS )
+    {
+        screenPutNumber(foreground, 9, 4, p2Score);
+
+    }
+    
+    if( pushedLinesInProgress ) // If lines are currently being pushed
+    {
+        if( pushedLinesFlashAnimation > (LINES_FLASH_ANIMATION_TICKS / 2) ) // Flash period of 50%
+        {
+            screenPutNumber(foreground, 13, 27, linesBeingPushed);
+            // Draw the exclamation mark.
+            screenPutSprite(foreground, 14, 27, SpEX_U);
+            screenPutSprite(foreground, 14, 28, SpEX_L);
+        }
+    }
 
     if( sessionGameState == GAME_SESSION_OVER )
     {

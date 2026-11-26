@@ -154,3 +154,17 @@ sessionState_t getSessionState( void );
  * @return targeted opponent id
  */
 uint8_t getOpponentId( void );
+
+/**
+ * @brief Send data to opponent.
+ * 
+ * @param[in] body Data to send.
+ */
+radioError_t radioSendData( radioDataMessageContents_t * body );
+
+/**
+ * @brief Receive data from opponent
+ * 
+ * @param[out] body Data to receive
+ */
+radioError_t radioGetData( radioDataMessageContents_t * body );
