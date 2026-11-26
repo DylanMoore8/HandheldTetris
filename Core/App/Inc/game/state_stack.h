@@ -19,7 +19,6 @@ typedef struct
     SpriteMap *(*render)();
 } GameState_t;
 
-bool stateStackEmpty(  );
 bool getCurrentState( GameState_t ** state );
 
 void setState( GameState_t * state );

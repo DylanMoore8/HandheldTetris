@@ -225,6 +225,9 @@ inputType_t inputHoldKey;
 
 SessionGameState_t sessionGameState;
 
+uint32_t p1Score;
+uint32_t p2Score;
+
 // FUNCTIONS
 
 /**
@@ -596,6 +599,20 @@ static void handleMovement()
     }
 }
 
+static uint32_t scoreByLines( uint8_t lineCount )
+{
+    uint32_t score = 0;
+    switch(lineCount)
+    {
+        case(1): { score = 100; } break;
+        case(2): { score = 300; } break;
+        case(3): { score = 500; } break;
+        case(4): { score = 800; } break;
+        default: {} break;
+    }
+    return score;
+}
+
 // CALLBACKS
 
 void sessionEnter()
@@ -605,6 +622,9 @@ void sessionEnter()
     clearAnimationTickCount = 0;
     gameOverTickCount = 0;
     lineClearBlockAnimation = 0;
+
+    p1Score = 0;
+    p2Score = 0;
 
     pieceLanded = false;
     holdPieceLock = false;
@@ -622,11 +642,6 @@ void sessionEnter()
     pcg32_init( 1234 );
     placeNewPiece(&nextPiece);
     placeNewPiece(&activePiece);
-}
-
-void sessionExit()
-{
-
 }
 
 void sessionSendInput( inputEvent_t *event )
@@ -649,7 +664,7 @@ void sessionSendInput( inputEvent_t *event )
                         holdPiece();
                         holdPieceLock = true; // Lock the hold functionality;
                     }
-                }
+                } break;
                 case(INPUT_A): {
                     pieceMove(&activePiece, PIECE_CW);
                 } break;
@@ -735,6 +750,9 @@ void sessionUpdate( )
                 {
                     fallFullLines();
 
+                    // Score P1 by number of lines
+                    p1Score += scoreByLines( fullLinesSize );
+
                     pieceFallTickCount = 0;
                     pieceMoveTickCount = 0;
                     sessionGameState = GAME_SESSION_PLAYING;
@@ -765,6 +783,11 @@ SpriteMap *sessionRender( )
     {
         showPieceInDisplay(&heldPiece, HLD_LOCATION_X, HLD_LOCATION_Y);
     }
+
+    // Display scores.
+    screenPutNumber(foreground, 9, 1, p1Score);
+    screenPutNumber(foreground, 9, 4, p2Score);
+
     if( sessionGameState == GAME_SESSION_OVER )
     {
         screenPutText(foreground, 3, 14, "GAME OVER");

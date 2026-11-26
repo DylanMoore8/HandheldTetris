@@ -2,6 +2,7 @@
 #include "input.h"
 #include "screen.h"
 #include "rng.h"
+#include "radio.h"
 #include <string.h>
 #include "state_stack.h"
 #include "globals.h"
@@ -26,6 +27,8 @@ char * mainMenuOptions[] = {
     NULL
 };
 
+char nameBuffer[4] = { 0 };
+
 uint8_t cursorPosition;
 uint8_t cursorMax;
 static SpriteMap map;
@@ -33,6 +36,8 @@ static SpriteMap map;
 char ** menuOptions = mainMenuOptions;
 TitleState_t titleGameState;
 
+availableOpponent ops[MAX_OPPONENTS];
+availableOpponent selectedOpponent;
 
 // FUNCTIONS
 
@@ -87,6 +92,7 @@ void titleEnter()
     cursorPosition = 0;
     cursorMax = 2;
     titleGameState = TITLE_MAIN;
+    selectedOpponent = (availableOpponent){ .id = 0 }; 
 }
 
 void titleSendInput( inputEvent_t *event )
@@ -115,9 +121,25 @@ void titleUpdate( )
 {
     switch(titleGameState)
     {
-        case(TITLE_MAIN):
+        case(TITLE_JOIN):
         {
+            // who is out there?
+            radioGetAvailableOpponents( ops, MAX_OPPONENTS );
+            // find a session 
 
+            // show who we found
+            for ( int i = 0; i < MAX_OPPONENTS; i++ )
+            {
+                availableOpponent op = ops[i];
+                if ( op.id != 0 )
+                {
+                    // TODO: display opponent
+                    #ifndef REMOVE_ONCE_SELECT_IS_IMPLEMENTED
+                    memcpy( &selectedOpponent, &op, sizeof(availableOpponent));
+                    break;
+                    #endif
+                }
+            }
         } break;
         default: {} break;
     }
@@ -142,6 +164,19 @@ SpriteMap *titleRender( )
         case(TITLE_JOIN):
         {
             screenPutText(map, 6, 5, "ROOMS");
+
+            uint8_t available_opp_inx = 0;
+            for ( uint8_t i = 0; i < MAX_OPPONENTS; i++ )
+            {
+                availableOpponent op = ops[i];
+
+                if( op.id != 0 )
+                {
+                    memcpy(nameBuffer, op.info.displayName, 3); // nameBuffer is of length 4, where nameBuffer[3] == '\0'.
+                    screenPutText(map, 6, 20 + (available_opp_inx*3), nameBuffer );
+                    available_opp_inx++;
+                }
+            }
         } break;
         default: {} break;
     }
