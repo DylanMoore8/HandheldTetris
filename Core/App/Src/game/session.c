@@ -236,8 +236,11 @@ uint8_t fullLinesSize;
 
 PushedLinesQueue pushedLinesQueue;
 bool pushedLinesInProgress;
+bool readyToPushLines;
 uint8_t linesBeingPushed;
 
+Pcg32State_t pieceRng;
+Pcg32State_t pushedLinesRng;
 
 PieceActive nextPiece;
 PieceActive heldPiece;
@@ -261,7 +264,7 @@ GameMode_t gameMode;
 static void shufflePieces()
 {
     for (uint32_t i = NUMBER_OF_PIECES - 1; i > 0; i--) {
-        uint32_t j = pcg32() % (i + 1);
+        uint32_t j = pcg32(&pieceRng) % (i + 1);
 
         const Piece * temp = pieceBag[i];
         pieceBag[i] = pieceBag[j];
@@ -465,7 +468,7 @@ static bool pieceMove( PieceActive *piece, PieceMovements movement )
 
 static void placeNewPiece( PieceActive * piece )
 {
-    piece->blockType = (pcg32() % 4) + 1; // Random color (1-4)
+    piece->blockType = (pcg32(&pieceRng) % 4) + 1; // Random color (1-4)
     piece->pos = startingPiecePos; // Place in center top
     piece->rotation = startingPieceRotation; // Initial rotation
     piece->structure = getNextPiece(); // Grab from random bag
@@ -518,6 +521,20 @@ bool isLineFull( uint8_t lineInx )
         }
     }
     return lineFull;
+}
+
+bool isLineEmpty( uint8_t lineInx )
+{
+    bool lineEmpty = true;
+    for( int x = 0; x < BOARD_WIDTH; x++ ) // For every block on row 'lineInx'
+    {
+        if( board[lineInx][x] != BLOCK_TYPE_EMPTY ) // If the block is empty
+        {
+            lineEmpty = false;
+            break;
+        }
+    }
+    return lineEmpty;
 }
 
 /**
@@ -588,6 +605,7 @@ void landPieceAndCheckLines()
 
 void fallLine(uint8_t lineInx)
 {
+    // Shift lines down from lineInx
     for( uint8_t i = lineInx; i > 0; i-- )
     {
         memcpy(&board[i], &board[i-1], BOARD_WIDTH);
@@ -637,6 +655,13 @@ static uint32_t scoreByLines( uint8_t lineCount )
     return score;
 }
 
+/**
+ * @brief Pushes a push lines event onto the push lines queue
+ * 
+ * @param lineCount Number of lines in event to push.
+ * @return true Push successful
+ * @return false Push unsuccessful (queue full)
+ */
 static bool pushLines( uint8_t lineCount )
 {
     bool rc = false;
@@ -655,6 +680,13 @@ static bool pushLines( uint8_t lineCount )
     return rc;
 }
 
+/**
+ * @brief Pop a push lines event from the pushed lines queue.
+ * 
+ * @param[out] lineCount Number of lines in event popped.
+ * @return true Pop successful.
+ * @return false Pop unsuccessful (queue empty).
+ */
 static bool popLines( uint8_t *lineCount )
 {
     bool rc = false;
@@ -676,6 +708,54 @@ static bool popLines( uint8_t *lineCount )
 static bool pushedLinesAvailable()
 {
     return ( pushedLinesQueue.count != 0 );
+}
+
+/**
+ * @brief Pushes lines onto the board from the bottom.
+ * 
+ * @param lines Number of lines to push.
+ * @return true All lines could be pushed.
+ * @return false Lines could not be pushed (overflow, in which case, game over).
+ */
+static bool pushUpLines( uint8_t lines )
+{
+    bool overflow = false;
+
+    uint8_t emptyColumn = pcg32(&pushedLinesRng) % BOARD_WIDTH; // Pick an empty column
+    BlockType linesType = (pcg32(&pushedLinesRng) % 4) + 1; // Generate a random line type
+
+    // Prepare line.
+    BlockType pushedLine[BOARD_WIDTH];
+
+    for( uint8_t i = 0; i < BOARD_WIDTH; i++ )
+    {
+        pushedLine[i] = linesType;
+    }
+    pushedLine[emptyColumn] = BLOCK_TYPE_EMPTY;
+
+    // Check to see if any of the upper lines go over the max.
+    for( uint8_t line_inx = 0; line_inx < lines; line_inx++ )
+    {
+        if( !isLineEmpty(line_inx) )
+        {
+            overflow = true;
+            break;
+        }
+    }
+
+    // Now copy the lower rows into the higher rows.
+    for( uint8_t line_inx = lines; line_inx < BOARD_HEIGHT; line_inx++ )
+    {
+        // Idea: If lines == 4, copy row 4 into 0, row 5 into 1, 6 into 2, ..., 20 into 16.
+        memcpy(&board[line_inx - lines], &board[line_inx], BOARD_WIDTH);
+    }
+    // Now copy the pushed rows into the lower rows
+    for( uint8_t line_inx = (BOARD_HEIGHT - lines); line_inx < BOARD_HEIGHT; line_inx++ )
+    {
+        memcpy(&board[line_inx], &pushedLine, BOARD_WIDTH);
+    }
+
+    return !overflow;
 }
 
 /**
@@ -726,7 +806,12 @@ void sessionEnter()
     pushedLinesFlashAnimation = 0;
     pushedLinesTickCount = 0;
     pushedLinesInProgress = false;
+    readyToPushLines = false;
     linesBeingPushed = 0;
+
+    // TODO: Change
+    pcg32_init(&pieceRng, 1234);
+    pcg32_init(&pushedLinesRng, 5678);
 
     pushLines(4);
     pushLines(3);
@@ -740,7 +825,6 @@ void sessionEnter()
     memset( board, BLOCK_TYPE_EMPTY, sizeof(BlockType) * BOARD_WIDTH * BOARD_HEIGHT );
     memset( foreground, 0, SCREEN_SPRITE_HEIGHT * SCREEN_SPRITE_WIDTH );
 
-    pcg32_init( 1234 );
     placeNewPiece(&nextPiece);
     placeNewPiece(&activePiece);
 }
@@ -817,8 +901,7 @@ void sessionUpdate( )
                 if( pushedLinesTickCount == PUSHED_LINES_TICKS )
                 {
                     // TODO
-                    //pushUpLines( linesBeingPushed );
-                    pushedLinesInProgress = false;
+                    readyToPushLines = true;
                 }
                 pushedLinesTickCount++;
             }
@@ -853,10 +936,18 @@ void sessionUpdate( )
                     lineClearBlockAnimation = 0;
                     sessionGameState = GAME_SESSION_CLEAR_LINES; // Transition to show clear lines animation
                 }
+                else if ( readyToPushLines ) // If we are ready to push lines
+                {
+                    pushUpLines( linesBeingPushed );
+                    pushedLinesInProgress = false;
+                    readyToPushLines = false;
+                }
+
                 if( pieceOverlapping( &activePiece ) ) // Piece is clipping immediately after spawning
                 {
                     sessionGameState = GAME_SESSION_OVER;
                 }
+
                 pieceLanded = false; // Reset the flag
                 holdPieceLock = false; // Release the hold functionality
             }
@@ -884,6 +975,13 @@ void sessionUpdate( )
 
                     // Score P1 by number of lines
                     p1Score += scoreByLines( fullLinesSize );
+
+                    if ( readyToPushLines ) // If we are ready to push lines
+                    {
+                        pushUpLines( linesBeingPushed );
+                        pushedLinesInProgress = false;
+                        readyToPushLines = false;
+                    }
 
                     pieceFallTickCount = 0;
                     pieceMoveTickCount = 0;
@@ -923,7 +1021,7 @@ SpriteMap *sessionRender( )
         screenPutNumber(foreground, 9, 4, p2Score);
 
     }
-    
+
     if( pushedLinesInProgress ) // If lines are currently being pushed
     {
         if( pushedLinesFlashAnimation > (LINES_FLASH_ANIMATION_TICKS / 2) ) // Flash period of 50%
