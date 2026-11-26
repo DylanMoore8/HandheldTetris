@@ -47,6 +47,10 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/App/Src/game/game.c
+    Core/App/Src/game/state_stack.c
+    Core/App/Src/game/session.c
+    Core/App/Src/game/title.c
+    Core/App/Src/game/globals.c
     Core/App/Src/game/rng.c
     Core/App/Src/game/sprites.c
     Core/App/Src/screen.c
