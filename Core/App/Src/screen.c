@@ -156,6 +156,24 @@ void screenDraw(const SpriteMap map)
     ssd1306_WriteBuffer(screenBuffer);
 }
 
+void screenOverlay( SpriteMap cmb, const SpriteMap back, const SpriteMap front )
+{
+    for(int y = 0; y < SCREEN_SPRITE_HEIGHT; y++)
+    {
+        for(int x = 0; x < SCREEN_SPRITE_WIDTH; x++)
+        {
+            SpriteIndex si = front[y][x];
+            if( si == SPRITE_EMPTY )
+            {
+                si = back[y][x];
+                
+            }
+
+            cmb[y][x] = si;
+        }
+    }
+}
+
 void screenDrawBF(const SpriteMap back, const SpriteMap front)
 {
     uint8_t spriteX = 0;

@@ -15,6 +15,7 @@ void screenPutSprite(SpriteMap map, uint8_t x, uint8_t y, SpriteIndex sprite_inx
 
 void screenPutText(SpriteMap map, uint8_t x, uint8_t y, char * text);
 void screenPutNumber(SpriteMap map, uint8_t x, uint8_t y, uint32_t num);
+void screenOverlay( SpriteMap cmb, const SpriteMap back, const SpriteMap front );
 
 void screenDraw(const SpriteMap map);
 void screenDrawBF(const SpriteMap back, const SpriteMap front);

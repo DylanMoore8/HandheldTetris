@@ -1,4 +1,3 @@
-#include "input.h"
 #include "cmsis_os2.h"
 #include "main.h"
 #include "stm32f411xe.h"
@@ -8,6 +7,11 @@
 #include "stdbool.h"
 #include "string.h"
 #include <limits.h>
+
+#include "input.h"
+
+extern UART_HandleTypeDef huart2;
+uint8_t input_char = 0;
 
 extern osMessageQueueId_t inputQueueHandle;
 
@@ -25,6 +29,8 @@ void initInput( inputHw_t * hw )
 {
     if ( hw == NULL ) return;
     memcpy( &inputHw, hw, sizeof(inputHw_t) );
+
+    HAL_UART_Receive_IT(&huart2, &input_char, 1);
 
     initialized = true;
 }
@@ -99,3 +105,46 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     }
 }
 
+inputType_t input_type = 255;
+inputState_t input_state = 255;
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART2) {
+
+        if( input_type == 255 ) // If type not defined:
+        {
+            switch ( input_char ) {
+                case( 'w' ): { input_type = INPUT_UP; } break;
+                case( 'a' ): { input_type = INPUT_LEFT; } break;
+                case( 's' ): { input_type = INPUT_DOWN; } break;
+                case( 'd' ): { input_type = INPUT_RIGHT; } break;
+                case( 'k' ): { input_type = INPUT_A; } break;
+                case( 'l' ): { input_type = INPUT_B; } break;
+            } // default: input_type still undefined
+        }
+        else
+        {
+            bool state_valid = true;
+
+            switch ( input_char ) {
+                case( 0 ): { input_state = INPUT_RELEASED; } break;
+                case( 1 ): { input_state = INPUT_PRESSED; } break;
+                default: { state_valid = false; } break;
+            }
+            
+            if( state_valid )
+            {
+                inputEvent_t input_event = {
+                    .type = input_type,
+                    .state = input_state,
+                };
+
+                osMessageQueuePut(inputQueueHandle, &input_event, 0, 0);
+
+                input_type = 255; // Reset to empty
+            }
+        }
+    }
+
+    HAL_UART_Receive_IT(&huart2, &input_char, 1);
+}

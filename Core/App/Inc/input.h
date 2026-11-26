@@ -1,3 +1,6 @@
+#ifndef INPUT_H
+#define INPUT_H
+
 #include "gpio.h"
 #include <stdint.h>
 
@@ -49,3 +52,5 @@ typedef struct
 } inputEvent_t;
 
 void initInput( inputHw_t * hw );
+
+#endif
