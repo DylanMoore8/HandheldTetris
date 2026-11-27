@@ -30,7 +30,7 @@ static void gameTask(void *argument)
     StateLabel_t queuedState;
 
     setState( getTitleGameState() );
-    
+
     while(1)
     {
         getCurrentState(&currentState);

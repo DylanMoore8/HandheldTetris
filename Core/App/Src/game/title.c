@@ -39,6 +39,10 @@ TitleState_t titleGameState;
 availableOpponent ops[MAX_OPPONENTS];
 availableOpponent selectedOpponent;
 
+extern ADC_HandleTypeDef hadc1;
+static uint64_t seed;
+static uint64_t sessionSeed;
+
 // FUNCTIONS
 
 void drawCursor()
@@ -62,12 +66,19 @@ void delegateSelect()
                 case(1): // VS
                 {
                     titleGameState = TITLE_JOIN;
+                    cursorPosition = 0; // reset cursor
+                    cursorMax = 1;
                 } break;
             }
         } break;
         case(TITLE_JOIN):
         {
-
+            selectedOpponent = ops[cursorPosition - 1];
+            titleGameState = TITLE_WAITING;
+        } break;
+        case(TITLE_WAITING):
+        {
+            
         } break;
         default: {} break;
     }
@@ -89,6 +100,7 @@ void delegateBack()
 
 void titleEnter()
 {
+    getSeed( &hadc1 );
     cursorPosition = 0;
     cursorMax = 2;
     titleGameState = TITLE_MAIN;
@@ -119,26 +131,18 @@ void titleSendInput( inputEvent_t *event )
 
 void titleUpdate( )
 {
+    // we are here 
+    radioBroadcast( DISPLAY_NAME, seed );
+    // who is out there?
+    radioGetAvailableOpponents( ops, MAX_OPPONENTS );
     switch(titleGameState)
     {
-        case(TITLE_JOIN):
+        case(TITLE_WAITING):
         {
-            // who is out there?
-            radioGetAvailableOpponents( ops, MAX_OPPONENTS );
-            // find a session 
-
-            // show who we found
-            for ( int i = 0; i < MAX_OPPONENTS; i++ )
+            if ( radioSessionRequestJoin( selectedOpponent, seed, &sessionSeed ) == RADIO_OK )
             {
-                availableOpponent op = ops[i];
-                if ( op.id != 0 )
-                {
-                    // TODO: display opponent
-                    #ifndef REMOVE_ONCE_SELECT_IS_IMPLEMENTED
-                    memcpy( &selectedOpponent, &op, sizeof(availableOpponent));
-                    break;
-                    #endif
-                }
+                // enter session
+                queueState( STATE_SESSION );
             }
         } break;
         default: {} break;
@@ -177,6 +181,8 @@ SpriteMap *titleRender( )
                     available_opp_inx++;
                 }
             }
+            cursorMax = available_opp_inx;
+            drawCursor();
         } break;
         default: {} break;
     }
