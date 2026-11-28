@@ -168,3 +168,9 @@ radioError_t radioSendData( radioDataMessageContents_t * body );
  * @param[out] body Data to receive
  */
 radioError_t radioGetData( radioDataMessageContents_t * body );
+
+/**
+ * @brief Flush the opponent data queue
+ * 
+ */
+void radioFlushData( void );

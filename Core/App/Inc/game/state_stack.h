@@ -16,7 +16,7 @@ typedef struct
     void (*enter)( );
     void (*sendInput)( inputEvent_t *event );
     void (*update)();
-    SpriteMap *(*render)();
+    void (*render)(SpriteMap * map);
 } GameState_t;
 
 bool getCurrentState( GameState_t ** state );

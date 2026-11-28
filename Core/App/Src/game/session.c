@@ -16,6 +16,7 @@
 #define LINES_FLASH_ANIMATION_TICKS ( 100 / GAME_TICK )
 #define PUSHED_LINES_TICKS ( 4000 / GAME_TICK )
 #define GAME_OVER_TICKS ( 5000 / GAME_TICK )
+#define RADIO_TICKS ( 1000 / GAME_TICK )
 #define INPUT_HOLD_NONE ( 255 )
 
 #define BOARD_WIDTH ( 10 )
@@ -25,12 +26,14 @@
 #define INC_ROTATION(rot) ( rot == 3 ? 0 : ( rot + 1 ) )
 #define DEC_ROTATION(rot) ( rot == 0 ? 3 : ( rot - 1 ) )
 
-#define NXT_LOCATION_X 13
-#define NXT_LOCATION_Y 13
-#define HLD_LOCATION_X 13
-#define HLD_LOCATION_Y 21
+#define NXT_LOCATION_X ( 13 )
+#define NXT_LOCATION_Y ( 13 )
+#define HLD_LOCATION_X ( 13 )
+#define HLD_LOCATION_Y ( 21 )
 
-#define PUSHED_LINES_QUEUE_SIZE 8
+#define PUSHED_LINES_QUEUE_SIZE ( 8 )
+
+#define SCORE_MULT ( 100 )
 
 const static SpriteMap background = {
   {  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  ,  0  },
@@ -208,13 +211,13 @@ typedef enum
 // GLOBALS
 
 static SpriteMap foreground;
-static SpriteMap cmb; // Both background and foreground together
 
 uint32_t pieceFallTickCount;
 uint32_t pieceMoveTickCount;
 uint32_t clearAnimationTickCount;
 uint32_t gameOverTickCount;
 uint32_t lineClearBlockAnimation;
+uint32_t radioTicks;
 
 uint32_t pushedLinesFlashAnimation;
 uint32_t pushedLinesTickCount;
@@ -238,6 +241,9 @@ PushedLinesQueue pushedLinesQueue;
 bool pushedLinesInProgress;
 bool readyToPushLines;
 uint8_t linesBeingPushed;
+
+uint16_t linesTx;
+uint16_t linesRx;
 
 Pcg32State_t pieceRng;
 Pcg32State_t pushedLinesRng;
@@ -646,13 +652,27 @@ static uint32_t scoreByLines( uint8_t lineCount )
     uint32_t score = 0;
     switch(lineCount)
     {
-        case(1): { score = 100; } break;
-        case(2): { score = 300; } break;
-        case(3): { score = 500; } break;
-        case(4): { score = 800; } break;
+        case(1): { score = 1; } break;
+        case(2): { score = 3; } break;
+        case(3): { score = 5; } break;
+        case(4): { score = 8; } break;
         default: {} break;
     }
     return score;
+}
+
+static uint32_t pushLinesByLines( uint8_t lineCount )
+{
+    uint32_t pushLines = 0;
+    switch(lineCount)
+    {
+        case(1): { pushLines = 0; } break;
+        case(2): { pushLines = 1; } break;
+        case(3): { pushLines = 2; } break;
+        case(4): { pushLines = 4; } break;
+        default: {} break;
+    }
+    return pushLines;
 }
 
 /**
@@ -758,6 +778,22 @@ static bool pushUpLines( uint8_t lines )
     return !overflow;
 }
 
+void setGameOver()
+{
+    sessionGameState = GAME_SESSION_OVER;
+
+    if( gameMode == GAME_MODE_VS )
+    {
+        radioSendData(
+            &(radioDataMessageContents_t) {
+                .gameState = 1,
+                .score = p1Score,
+                .lines = 0
+            }
+        );
+    }
+}
+
 /**
  * @brief Handles P2 sends.
  * 
@@ -766,14 +802,26 @@ static void handleP2()
 {
     radioDataMessageContents_t p2Data;
     radioError_t resp = radioGetData( &p2Data );
+
     if( resp == RADIO_OK )
     {
-        if( p2Data.lines > 0 ) // If P2 is sending lines:
+        if( p2Data.lines > linesRx ) // If P2 is confused:
         {
-            pushLines(p2Data.lines);
+            uint16_t linesReceived = p2Data.lines - linesRx;
+            if( linesReceived >= 1 && linesReceived <= 4 ) // If P2 is sending lines:
+            {
+                pushLines(linesReceived);
+            }
         }
+
+        linesRx = p2Data.lines; 
+
         p2Score = p2Data.score; // Update score
         // TODO: Handle game state
+        if( p2Data.gameState == 1 )
+        {
+            setGameOver();
+        }
     }
 }
 
@@ -786,6 +834,7 @@ void sessionEnter()
     clearAnimationTickCount = 0;
     gameOverTickCount = 0;
     lineClearBlockAnimation = 0;
+    radioTicks = 0;
 
     p1Score = 0;
     p2Score = 0;
@@ -809,14 +858,12 @@ void sessionEnter()
     readyToPushLines = false;
     linesBeingPushed = 0;
 
-    // TODO: Change
-    pcg32_init(&pieceRng, 1234);
-    pcg32_init(&pushedLinesRng, 5678);
+    linesTx = 0;
+    linesRx = 0;
 
-    pushLines(4);
-    pushLines(3);
-    pushLines(2);
-    pushLines(1);
+    // TODO: Change
+    pcg32_init(&pieceRng, getGameSeed());
+    pcg32_init(&pushedLinesRng, getSeed(&hadc1));
 
     sessionGameState = GAME_SESSION_PLAYING;
 
@@ -872,6 +919,28 @@ void sessionSendInput( inputEvent_t *event )
 
 void sessionUpdate( )
 {
+    if( gameMode == GAME_MODE_VS )
+    {
+        // Send Beacon
+        if( radioTicks == (RADIO_TICKS/2) )
+        {
+            radioBroadcast( DISPLAY_NAME, getGameSeed() );
+        }
+        // Send Data
+        if( radioTicks == RADIO_TICKS )
+        {
+            radioSendData(
+                &(radioDataMessageContents_t) {
+                    .gameState = (sessionGameState == GAME_SESSION_OVER),
+                    .lines = linesTx,
+                    .score = p1Score
+                }
+            );
+            radioTicks = 0;
+        }
+        radioTicks++;
+    }
+
     switch(sessionGameState)
     {
         case(GAME_SESSION_PLAYING):
@@ -900,7 +969,6 @@ void sessionUpdate( )
 
                 if( pushedLinesTickCount == PUSHED_LINES_TICKS )
                 {
-                    // TODO
                     readyToPushLines = true;
                 }
                 pushedLinesTickCount++;
@@ -945,7 +1013,7 @@ void sessionUpdate( )
 
                 if( pieceOverlapping( &activePiece ) ) // Piece is clipping immediately after spawning
                 {
-                    sessionGameState = GAME_SESSION_OVER;
+                    setGameOver();
                 }
 
                 pieceLanded = false; // Reset the flag
@@ -976,6 +1044,11 @@ void sessionUpdate( )
                     // Score P1 by number of lines
                     p1Score += scoreByLines( fullLinesSize );
 
+                    if( gameMode == GAME_MODE_VS )
+                    {
+                        linesTx += pushLinesByLines(fullLinesSize);
+                    }
+
                     if ( readyToPushLines ) // If we are ready to push lines
                     {
                         pushUpLines( linesBeingPushed );
@@ -1002,7 +1075,7 @@ void sessionUpdate( )
     }
 }
 
-SpriteMap *sessionRender( )
+void sessionRender( SpriteMap * map )
 {
     screenReset(foreground);
 
@@ -1015,10 +1088,10 @@ SpriteMap *sessionRender( )
     }
 
     // Display scores.
-    screenPutNumber(foreground, 9, 1, p1Score);
+    screenPutNumber(foreground, 9, 1, p1Score * SCORE_MULT);
     if( gameMode == GAME_MODE_VS )
     {
-        screenPutNumber(foreground, 9, 4, p2Score);
+        screenPutNumber(foreground, 9, 4, p2Score * SCORE_MULT);
 
     }
 
@@ -1037,9 +1110,8 @@ SpriteMap *sessionRender( )
     {
         screenPutText(foreground, 3, 14, "GAME OVER");
     }
-    screenOverlay(cmb, background, foreground);
 
-    return &cmb;
+    screenOverlay(*map, background, foreground);
 }
 
 GameState_t sessionState = {

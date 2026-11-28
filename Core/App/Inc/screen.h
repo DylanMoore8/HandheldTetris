@@ -11,6 +11,9 @@ typedef SpriteIndex SpriteMap[SCREEN_SPRITE_HEIGHT][SCREEN_SPRITE_WIDTH];
 
 void screenReset(SpriteMap map);
 
+bool swapSpriteBuffers( uint32_t timeoutMs );
+SpriteMap * screenGetWorkingBuffer( void );
+
 void screenPutSprite(SpriteMap map, uint8_t x, uint8_t y, SpriteIndex sprite_inx);
 
 void screenPutText(SpriteMap map, uint8_t x, uint8_t y, char * text);
@@ -23,5 +26,7 @@ void screenDrawBF(const SpriteMap back, const SpriteMap front);
 // Prints to USART for screen emulator
 void screenDrawDebug(const SpriteMap map);
 void screenDrawBFDebug(const SpriteMap back, const SpriteMap fore);
+
+void screenInit(void);
 
 #endif

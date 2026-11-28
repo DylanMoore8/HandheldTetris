@@ -7,6 +7,10 @@ index into a black/white PNG sprite map. Sprites are placed left-to-right,
 top-to-bottom into a 64x128 buffer. When '\n' is received the buffer is
 shown on screen and then cleared.
 
+A menu bar at the top of the window has a serial port selector. At startup
+the first available port is selected automatically; if there are none, the
+program idles until a port is chosen from the menu.
+
 Requires: pygame, pyserial
     pip install pygame pyserial
 """
@@ -15,12 +19,12 @@ import sys
 
 import pygame
 import serial
+import serial.tools.list_ports
 
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SERIAL_PORT = "COM3"   # e.g. "COM3" on Windows
-BAUD_RATE = 115200
+BAUD_RATE = 576000             # serial port is chosen from the menu bar
 SPRITE_MAP_PATH = "./python/sprites.png"
 
 # Incoming data format:
@@ -29,7 +33,7 @@ SPRITE_MAP_PATH = "./python/sprites.png"
 #           (so sprite index 255 can't be used in this mode)
 INPUT_MODE = "raw"
 
-SCALE = 6                      # integer window scale factor
+SCALE = 4                      # integer window scale factor
 
 # Bytes sent after the key character on press / release.
 # (Sent as raw bytes 0x01 and 0x00, i.e. C-style '\1' and '\0'.)
@@ -58,6 +62,19 @@ else:
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
+
+# Menu bar (drawn above the emulated screen, in window pixels)
+MENU_BAR_HEIGHT = 28
+MENU_ROW_HEIGHT = 24
+MENU_BUTTON_WIDTH = 210
+MIN_WINDOW_WIDTH = 360         # keeps the menu bar usable at small SCALE values
+
+BG_COLOR = (20, 20, 20)
+BAR_COLOR = (40, 40, 40)
+BAR_LINE_COLOR = (90, 90, 90)
+HOVER_COLOR = (75, 75, 75)
+TEXT_COLOR = (230, 230, 230)
+TEXT_DIM_COLOR = (140, 140, 140)
 
 
 def load_sprite_map(path):
@@ -139,23 +156,143 @@ def parse_line(line, overflowed):
         return None
 
 
+def list_ports():
+    """Return a sorted list of available serial port names (never raises)."""
+    try:
+        return sorted(p.device for p in serial.tools.list_ports.comports())
+    except Exception as exc:
+        print(f"Warning: could not list serial ports: {exc}", file=sys.stderr)
+        return []
+
+
+def open_port(name):
+    """Open the named port with the configured settings (8N1, non-blocking).
+
+    Returns None (after printing a warning) if it can't be opened.
+    """
+    try:
+        return serial.Serial(
+            port=name,
+            baudrate=BAUD_RATE,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=0,  # non-blocking reads
+        )
+    except (serial.SerialException, OSError, ValueError) as exc:
+        print(f"Warning: could not open {name}: {exc}", file=sys.stderr)
+        return None
+
+
+def close_port(ser):
+    """Close a port if there is one, ignoring errors."""
+    if ser is not None:
+        try:
+            ser.close()
+        except (serial.SerialException, OSError):
+            pass
+
+
+class PortMenu:
+    """Menu bar with a dropdown for choosing the serial port."""
+
+    def __init__(self, font):
+        self.font = font
+        self.button = pygame.Rect(8, 4, MENU_BUTTON_WIDTH, MENU_BAR_HEIGHT - 8)
+        self.ports = []
+        self.selected = None   # name of the chosen port, or None
+        self.is_open = False   # dropdown list visible?
+
+    def _item_rect(self, index):
+        return pygame.Rect(self.button.x,
+                           MENU_BAR_HEIGHT + index * MENU_ROW_HEIGHT,
+                           self.button.w, MENU_ROW_HEIGHT)
+
+    def handle_click(self, pos):
+        """Process a left click. Returns a port name if the user picked one."""
+        if self.is_open:
+            self.is_open = False
+            for i, name in enumerate(self.ports):
+                if self._item_rect(i).collidepoint(pos):
+                    return name
+            return None
+        if self.button.collidepoint(pos):
+            self.ports = list_ports()   # rescan every time the list is opened
+            self.is_open = True
+        return None
+
+    def _blit_text(self, surface, text, color, left, centery):
+        img = self.font.render(text, True, color)
+        surface.blit(img, (left, centery - img.get_height() // 2))
+        return img
+
+    def draw(self, surface, status):
+        width = surface.get_width()
+        mouse = pygame.mouse.get_pos()
+
+        # Bar background
+        pygame.draw.rect(surface, BAR_COLOR, (0, 0, width, MENU_BAR_HEIGHT))
+        pygame.draw.line(surface, BAR_LINE_COLOR,
+                         (0, MENU_BAR_HEIGHT - 1), (width, MENU_BAR_HEIGHT - 1))
+
+        # Selector button: current port + dropdown arrow
+        hot = self.is_open or self.button.collidepoint(mouse)
+        pygame.draw.rect(surface, HOVER_COLOR if hot else BG_COLOR,
+                         self.button, border_radius=3)
+        pygame.draw.rect(surface, BAR_LINE_COLOR, self.button, 1,
+                         border_radius=3)
+        self._blit_text(surface, self.selected or "No port selected",
+                        TEXT_COLOR if self.selected else TEXT_DIM_COLOR,
+                        self.button.x + 8, self.button.centery)
+        ax, ay = self.button.right - 14, self.button.centery
+        pygame.draw.polygon(surface, TEXT_COLOR,
+                            [(ax - 4, ay - 2), (ax + 4, ay - 2), (ax, ay + 3)])
+
+        # Status text, right-aligned
+        img = self.font.render(status, True, TEXT_DIM_COLOR)
+        surface.blit(img, (width - img.get_width() - 8,
+                           self.button.centery - img.get_height() // 2))
+
+        # Dropdown list (drawn last so it overlays the screen)
+        if self.is_open:
+            names = self.ports or [None]
+            for i, name in enumerate(names):
+                rect = self._item_rect(i)
+                hovered = name is not None and rect.collidepoint(mouse)
+                pygame.draw.rect(surface, HOVER_COLOR if hovered else BAR_COLOR,
+                                 rect)
+                self._blit_text(
+                    surface,
+                    name if name is not None else "No ports found",
+                    TEXT_COLOR if name is not None else TEXT_DIM_COLOR,
+                    rect.x + 8, rect.centery)
+            pygame.draw.rect(
+                surface, BAR_LINE_COLOR,
+                pygame.Rect(self.button.x, MENU_BAR_HEIGHT, self.button.w,
+                            MENU_ROW_HEIGHT * len(names)), 1)
+
+
 def main():
     pygame.init()
-    window = pygame.display.set_mode((SCREEN_W * SCALE, SCREEN_H * SCALE))
+    screen_px_w = SCREEN_W * SCALE
+    screen_px_h = SCREEN_H * SCALE
+    win_w = max(screen_px_w, MIN_WINDOW_WIDTH)
+    window = pygame.display.set_mode((win_w, MENU_BAR_HEIGHT + screen_px_h))
     pygame.display.set_caption("USART Sprite Display")
     clock = pygame.time.Clock()
+    font = pygame.font.Font(None, 22)
+    frame_pos = ((win_w - screen_px_w) // 2, MENU_BAR_HEIGHT)
 
     sprite_map, sprite_rows = load_sprite_map(SPRITE_MAP_PATH)
 
-    # Raises serial.SerialException if the port can't be opened.
-    ser = serial.Serial(
-        port=SERIAL_PORT,
-        baudrate=BAUD_RATE,
-        bytesize=serial.EIGHTBITS,
-        parity=serial.PARITY_NONE,
-        stopbits=serial.STOPBITS_ONE,
-        timeout=0,  # non-blocking reads
-    )
+    # Auto-select the first available port; if there are none, stay idle
+    # until the user picks one from the menu.
+    menu = PortMenu(font)
+    ser = None
+    ports = list_ports()
+    if ports:
+        menu.selected = ports[0]
+        ser = open_port(ports[0])
 
     shown_frame = pygame.Surface((SCREEN_W, SCREEN_H))
     shown_frame.fill(BLACK)
@@ -167,14 +304,39 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                choice = menu.handle_click(event.pos)
+                if choice is not None:
+                    close_port(ser)
+                    menu.selected = choice
+                    ser = open_port(choice)
+                    rx.clear()
+                    overflowed = False
+
             elif event.type in (pygame.KEYDOWN, pygame.KEYUP):
                 char = key_to_char(event.key)
-                if char is not None:
+                if char is not None and ser is not None:
                     suffix = (KEY_PRESS_BYTE if event.type == pygame.KEYDOWN
                               else KEY_RELEASE_BYTE)
-                    ser.write(char.encode("ascii") + suffix)
+                    try:
+                        ser.write(char.encode("ascii") + suffix)
+                    except (serial.SerialException, OSError) as exc:
+                        print(f"Warning: write to {menu.selected} failed: "
+                              f"{exc}", file=sys.stderr)
+                        close_port(ser)
+                        ser = None
 
-        data = ser.read(ser.in_waiting or 1)
+        data = b""
+        if ser is not None:
+            try:
+                data = ser.read(ser.in_waiting or 1)
+            except (serial.SerialException, OSError) as exc:
+                print(f"Warning: lost connection to {menu.selected}: {exc}",
+                      file=sys.stderr)
+                close_port(ser)
+                ser = None
+
         for byte in data:
             if byte != TERMINATOR:
                 # Stop storing once too long (so a runaway message can't
@@ -193,12 +355,22 @@ def main():
             rx.clear()
             overflowed = False
 
-        scaled = pygame.transform.scale(shown_frame, window.get_size())
-        window.blit(scaled, (0, 0))
+        if ser is not None:
+            status = "Connected"
+        elif menu.selected is not None:
+            status = "Not connected"
+        else:
+            status = "Idle (no ports)"
+
+        window.fill(BG_COLOR)
+        scaled = pygame.transform.scale(shown_frame,
+                                        (screen_px_w, screen_px_h))
+        window.blit(scaled, frame_pos)
+        menu.draw(window, status)
         pygame.display.flip()
         clock.tick(120)
 
-    ser.close()
+    close_port(ser)
     pygame.quit()
 
 

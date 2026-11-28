@@ -26,7 +26,8 @@ typedef struct
     uint8_t opponentId; 
 } sessionInfo_t;
 
-__weak uint8_t getId( void ) {return BOARD_ID;}
+static uint8_t id;
+__weak uint8_t getId( void ) {return id;}
 
 static radio_t radio = {0};
 static SX1278_hw_t moduleHw = {0};
@@ -36,7 +37,7 @@ static sessionInfo_t session = {0};
 static unsigned long receivedPacketCount = 0;
 static unsigned long sentPacketCount = 0;
 
-#define SESSION_TIMEOUT 3000 // after 3 seconds of no pings, the session times out
+#define SESSION_TIMEOUT 10000 // after 3 seconds of no pings, the session times out
 
 #define RADIO_MUTEX_TIMOUT_MS 1000
 
@@ -79,6 +80,8 @@ radioError_t radioInit( radiohw_t * hw )
          osMessageQueueGetMsgSize( hw->txQueue ) != RADIO_MESSAGE_SIZE ) return RADIO_ERR;
     radio.hw = *hw;
     
+    id = (uint8_t)HAL_GetUIDw0();
+
     // initialize LoRa module
     moduleHw.dio0.port = RADIO_DIO0_GPIO_Port;
 	moduleHw.dio0.pin = RADIO_DIO0_Pin;
@@ -436,6 +439,14 @@ radioError_t radioSessionRequestJoin( availableOpponent op, uint64_t localSeed, 
         {
             /* opponent doesn't exist */
         }
+        else if ( opState == IN_SESSION && waitingForUs )
+        {
+            /* they already requested us, so we can join the session */
+            session.opponentId = op.id;
+            session.state      = IN_SESSION;
+            *sessionSeed       = op.id > getId() ? op.info.seed : localSeed; // use the larger ids seed
+            err                = RADIO_OK;
+        }
         else if ( opState == WAITING && waitingForUs )
         {
             /* they already requested us, so we can join the session */
@@ -504,6 +515,14 @@ radioError_t radioGetData( radioDataMessageContents_t * body )
         }
     }
     return err;
+}
+
+void radioFlushData( void )
+{
+    if ( radio.initialized )
+    {
+        osMessageQueueReset(radio.hw.rxQueue);
+    }
 }
 
 sessionState_t getSessionState( void )

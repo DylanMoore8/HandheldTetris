@@ -45,9 +45,12 @@ static void gameTask(void *argument)
     
             currentState->update();
     
-            map = currentState->render();
-            screenDraw(*map);
-            //screenDrawDebug(*map);
+            map = screenGetWorkingBuffer();
+            
+            currentState->render(map);
+            
+            // Performs the draw.
+            swapSpriteBuffers(osWaitForever);
         }
 
         osDelayUntil( lastTicks + TICKS_PER_SEC );

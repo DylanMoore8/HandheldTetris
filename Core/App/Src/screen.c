@@ -11,7 +11,39 @@
 #include "sprites.h"
 
 static uint8_t screenBuffer[SSD1306_BUFFER_SIZE];
+
+static SpriteMap spriteBuffers[2];
+static uint8_t workingIndex = 0;
+
+static SpriteMap * workingBuffer = &spriteBuffers[0];
+static SpriteMap * drawBuffer = &spriteBuffers[1];
+
+static osSemaphoreId_t drawStart;
+static osSemaphoreId_t drawDone;
+
 static char numberBuffer[16];
+
+bool swapSpriteBuffers( uint32_t timeoutMs )
+{
+    if( osSemaphoreAcquire(drawDone, timeoutMs) != osOK )
+    {
+        return false;
+    }
+
+    // Perform the swap
+    workingIndex = 1 - workingIndex;
+    workingBuffer = &spriteBuffers[workingIndex];
+    drawBuffer = &spriteBuffers[1 - workingIndex];
+
+    osSemaphoreRelease( drawStart );
+
+    return true;
+}
+
+SpriteMap * screenGetWorkingBuffer( void )
+{
+    return workingBuffer;
+}
 
 void screenReset(SpriteMap map)
 {
@@ -174,58 +206,6 @@ void screenOverlay( SpriteMap cmb, const SpriteMap back, const SpriteMap front )
     }
 }
 
-void screenDrawBF(const SpriteMap back, const SpriteMap front)
-{
-    uint8_t spriteX = 0;
-    uint8_t spriteY = SCREEN_SPRITE_HEIGHT - 1;
-
-    const Sprite *sprite1;
-    const Sprite *sprite2;
-
-    SpriteIndex si1, si2;
-
-    for( uint32_t i = 0; i < SSD1306_BUFFER_SIZE; i += 4 )
-    {
-        si1 = front[spriteY][spriteX];
-        if( si1 == SPRITE_EMPTY )
-        {
-            si1 = back[spriteY][spriteX];
-        }
-
-        si2 = front[spriteY][spriteX+1];
-        if( si2 == SPRITE_EMPTY )
-        {
-            si2 = back[spriteY][spriteX+1];
-        }
-
-        sprite1 = getSprite(si1);
-        sprite2 = getSprite(si2);
-
-        // Sp1  | Sp2
-        // 0123 | 0123 \ of byte
-        // 4567 | 4567 /    0
-        // 0123 | 0123 \ of byte
-        // 4567 | 4567 /    1
-
-        screenBuffer[ i+3 ] = ( (*sprite2)[0] << 4 )   | ( (*sprite1)[0] & 0x0F );
-        screenBuffer[ i+2 ] = ( (*sprite2)[0] & 0xF0 ) | ( (*sprite1)[0] >> 4 );
-        screenBuffer[ i+1 ] = ( (*sprite2)[1] << 4 )   | ( (*sprite1)[1] & 0x0F );
-        screenBuffer[  i  ] = ( (*sprite2)[1] & 0xF0 ) | ( (*sprite1)[1] >> 4 );
-
-        if( spriteY != 0 )
-        {
-            spriteY--;
-        }
-        else
-        {
-            spriteX += 2;
-            spriteY = SCREEN_SPRITE_HEIGHT - 1;
-        }
-    }
-
-    ssd1306_WriteBuffer(screenBuffer);
-}
-
 void screenDrawDebug(const SpriteMap map)
 {
     // TODO: Change to SSD1306
@@ -279,12 +259,33 @@ const osThreadAttr_t screenTask_attributes = {
   .priority = (osPriority_t) osPriorityNormal,
 };
 
-void screenTask(void)
+/*
+There's two buffers:
+ - A working buffer
+ - A draw buffer
+
+The working buffer is worked on by the application.
+While that is happending, the draw buffer is being drawn by this task.
+
+When the draw buffer and the working buffer are done being worked on and drawn,
+They will switch.
+*/
+void screenTask(void *argument)
 {
+    while(1)
+    {
+        osSemaphoreAcquire(drawStart, osWaitForever);
     
+        screenDraw(*drawBuffer);
+        screenDrawDebug(*drawBuffer); // Print to USART
+    
+        osSemaphoreRelease( drawDone );
+    }
 }
 
 void screenInit(void)
 {
-    //screenTaskHandle = osThreadNew(screenTask, NULL, &screenTask_attributes);
+    drawStart = osSemaphoreNew( 1, 0, NULL );
+    drawDone  = osSemaphoreNew( 1, 1, NULL );
+    screenTaskHandle = osThreadNew(screenTask, NULL, &screenTask_attributes);
 }

@@ -27,11 +27,8 @@ char * mainMenuOptions[] = {
     NULL
 };
 
-char nameBuffer[4] = { 0 };
-
 uint8_t cursorPosition;
 uint8_t cursorMax;
-static SpriteMap map;
 
 char ** menuOptions = mainMenuOptions;
 TitleState_t titleGameState;
@@ -43,11 +40,15 @@ extern ADC_HandleTypeDef hadc1;
 static uint64_t seed;
 static uint64_t sessionSeed;
 
+static availableOpponent available_ops[MAX_OPPONENTS];
+uint8_t available_ops_length;
+static char available_opp_names[4][MAX_OPPONENTS];
+
 // FUNCTIONS
 
-void drawCursor()
+void drawCursor( SpriteMap * map )
 {
-    screenPutSprite(map, 4, 20 + (cursorPosition*3), 1);
+    screenPutSprite(*map, 4, 20 + (cursorPosition*3), 1);
 }
 
 void delegateSelect()
@@ -67,14 +68,17 @@ void delegateSelect()
                 {
                     titleGameState = TITLE_JOIN;
                     cursorPosition = 0; // reset cursor
-                    cursorMax = 1;
                 } break;
             }
         } break;
         case(TITLE_JOIN):
         {
-            selectedOpponent = ops[cursorPosition - 1];
-            titleGameState = TITLE_WAITING;
+            if( available_ops_length > 0 && ( cursorPosition < available_ops_length ) ) // Safety check
+            {
+                // Store the selected opponent.
+                memcpy(&selectedOpponent, &available_ops[cursorPosition], sizeof(availableOpponent));
+                titleGameState = TITLE_WAITING;
+            }
         } break;
         case(TITLE_WAITING):
         {
@@ -90,8 +94,17 @@ void delegateBack()
     {
         case(TITLE_JOIN):
         {
-            titleGameState = TITLE_MAIN;
+            titleGameState = TITLE_MAIN; // Go back to main
+            available_ops_length = 0;
+            cursorMax = 2;
+            cursorPosition = 0;
         } break;
+        case(TITLE_WAITING):
+        {
+            cursorMax = 1; // Lock the cursor
+            cursorPosition = 0;
+            titleGameState = TITLE_JOIN;
+        }
         default: {} break;
     }
 }
@@ -100,11 +113,19 @@ void delegateBack()
 
 void titleEnter()
 {
-    getSeed( &hadc1 );
+    seed = getSeed( &hadc1 );
+
     cursorPosition = 0;
     cursorMax = 2;
     titleGameState = TITLE_MAIN;
+
     selectedOpponent = (availableOpponent){ .id = 0 }; 
+
+    radioFlushData();
+
+    memset(available_opp_names, 0, MAX_OPPONENTS * 4);
+    memset(available_ops, 0, MAX_OPPONENTS * sizeof(availableOpponent));
+    available_ops_length = 0;
 }
 
 void titleSendInput( inputEvent_t *event )
@@ -131,17 +152,55 @@ void titleSendInput( inputEvent_t *event )
 
 void titleUpdate( )
 {
-    // we are here 
-    radioBroadcast( DISPLAY_NAME, seed );
-    // who is out there?
-    radioGetAvailableOpponents( ops, MAX_OPPONENTS );
+    // If we are in the join or waiting screen:
+    if( (titleGameState == TITLE_JOIN) || (titleGameState == TITLE_WAITING) )
+    {
+        // we are here 
+        radioBroadcast( DISPLAY_NAME, seed );
+        radioGetAvailableOpponents( ops, MAX_OPPONENTS );
+    }
+
     switch(titleGameState)
     {
+        case(TITLE_JOIN):
+        {
+            // who is out there?
+
+            available_ops_length = 0;
+            for ( uint8_t i = 0; i < MAX_OPPONENTS; i++ )
+            {
+                availableOpponent op = ops[i];
+                char * nextNameBuffer = available_opp_names[available_ops_length];
+                availableOpponent * nextAvailable = &available_ops[available_ops_length];
+
+                if( op.id != 0 )
+                {
+                    memcpy(nextAvailable, &op, sizeof(availableOpponent) );
+                    memcpy(nextNameBuffer, op.info.displayName, 3); // nameBuffer is of length 4, where nameBuffer[3] == '\0'.
+                    available_ops_length++;
+                }
+            }
+
+            cursorMax = available_ops_length;
+
+            if( cursorMax == 0 )
+            {
+                cursorPosition = 0;
+            }
+            else if( cursorPosition >= cursorMax )
+            {
+                cursorPosition = cursorMax - 1;
+            }
+
+        } break;
         case(TITLE_WAITING):
         {
             if ( radioSessionRequestJoin( selectedOpponent, seed, &sessionSeed ) == RADIO_OK )
             {
+                setGameSeed(sessionSeed);
+
                 // enter session
+                setGameMode( GAME_MODE_VS );
                 queueState( STATE_SESSION );
             }
         } break;
@@ -149,45 +208,43 @@ void titleUpdate( )
     }
 }
 
-SpriteMap *titleRender( )
+void titleRender( SpriteMap * map )
 {
-    screenReset(map);
+    screenReset(*map);
 
     switch(titleGameState)
     {
         case(TITLE_MAIN):
         {
-            screenPutText(map, 5, 5, "TETRIS");
-            screenPutText(map, 4, 8, "DYLAN M.");
-            screenPutText(map, 4, 11, "CALLUM M.");
+            screenPutText(*map, 5, 5, "TETRIS");
+            screenPutText(*map, 4, 8, "DYLAN M.");
+            screenPutText(*map, 4, 11, "CALLUM M.");
 
-            screenPutText(map, 6, 20, "SOLO");
-            screenPutText(map, 6, 23, "VS");
-            drawCursor();
+            screenPutText(*map, 6, 20, "SOLO");
+            screenPutText(*map, 6, 23, "VS");
+            drawCursor(map);
         } break;
         case(TITLE_JOIN):
         {
-            screenPutText(map, 6, 5, "ROOMS");
+            screenPutText(*map, 6, 5, "ROOMS");
 
-            uint8_t available_opp_inx = 0;
-            for ( uint8_t i = 0; i < MAX_OPPONENTS; i++ )
+            for( int i = 0; i < available_ops_length; i++ )
             {
-                availableOpponent op = ops[i];
-
-                if( op.id != 0 )
-                {
-                    memcpy(nameBuffer, op.info.displayName, 3); // nameBuffer is of length 4, where nameBuffer[3] == '\0'.
-                    screenPutText(map, 6, 20 + (available_opp_inx*3), nameBuffer );
-                    available_opp_inx++;
-                }
+                screenPutText(*map, 6, 20 + (i*3), available_opp_names[i] );
             }
-            cursorMax = available_opp_inx;
-            drawCursor();
+            
+            if( available_ops_length != 0 )
+            {
+                drawCursor(map);
+            }
+            
+        } break;
+        case(TITLE_WAITING):
+        {
+            screenPutText(*map, 3, 8, "WAITING...");
         } break;
         default: {} break;
     }
-
-    return &map;
 }
 
 GameState_t titleState = {

@@ -246,6 +246,7 @@ void StartDefaultTask(void *argument)
   initInput( &inputHw );
   ssd1306_Init();
 
+  screenInit();
   gameInit();
   /* Infinite loop */
   for(;;)
